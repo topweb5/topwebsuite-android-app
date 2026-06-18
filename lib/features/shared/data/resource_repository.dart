@@ -43,4 +43,31 @@ class ResourceRepository {
   Future<void> remove(ResourceConfig config, String id) {
     return _api.delete(config.deletePath(id));
   }
+
+  /// Multipart create — used when a resource needs a file upload (e.g. the
+  /// letterhead asset file).
+  Future<Map<String, dynamic>> createMultipart(
+    ResourceConfig config,
+    Map<String, String> fields,
+    Map<String, String> files,
+  ) async {
+    return unwrapData(
+      await _api.multipartPost(config.createPath, fields: fields, files: files),
+    );
+  }
+
+  Future<Map<String, dynamic>> updateMultipart(
+    ResourceConfig config,
+    String id,
+    Map<String, String> fields,
+    Map<String, String> files,
+  ) async {
+    return unwrapData(
+      await _api.multipartPatch(
+        config.updatePath(id),
+        fields: fields,
+        files: files,
+      ),
+    );
+  }
 }

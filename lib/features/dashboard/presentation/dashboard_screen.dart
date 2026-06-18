@@ -1,88 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:in_app_review/in_app_review.dart';
 
 import '../../../app/theme.dart';
-import '../../../core/api/api_client.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../../core/widgets/app_logo.dart';
+import '../../../core/widgets/entrance_animation.dart';
 import '../../auth/application/auth_controller.dart';
+import '../application/dashboard_controller.dart';
+import '../domain/dashboard_data.dart';
 
-// ── Providers ────────────────────────────────────────────────────────────────
-
-final dashboardSummaryProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  final api = ref.watch(apiClientProvider);
-  final subscription = await api.getMap('/api/billing/subscription/');
-  final usage        = await api.getMap('/api/auth/usage/');
-  return {'subscription': subscription, 'usage': usage};
-});
-
-final _docCountProvider = FutureProvider<Map<String, int>>((ref) async {
-  final api = ref.watch(apiClientProvider);
+/// Opens the in-app review prompt, falling back to the store listing page.
+Future<void> rateApp() async {
+  final review = InAppReview.instance;
   try {
-    final results = await Future.wait([
-      api.getList('/api/invoices/'),
-      api.getList('/api/receipts/'),
-      api.getList('/api/waybills/'),
-      api.getList('/api/letters/'),
-      api.getList('/api/quotations/'),
-      api.getList('/api/v1/business-profile/'),
-    ]);
-    return {
-      'invoices':   results[0].length,
-      'receipts':   results[1].length,
-      'waybills':   results[2].length,
-      'letters':    results[3].length,
-      'quotations': results[4].length,
-      'profiles':   results[5].length,
-    };
-  } catch (_) {
-    return {};
-  }
-});
-
-final _recentDocsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final api = ref.watch(apiClientProvider);
-  try {
-    // Fetch recent from multiple endpoints and merge
-    final results = await Future.wait([
-      api.getList('/api/invoices/'),
-      api.getList('/api/receipts/'),
-      api.getList('/api/waybills/'),
-      api.getList('/api/letters/'),
-    ]);
-    final all = <Map<String, dynamic>>[];
-    for (final list in results) {
-      all.addAll(list.whereType<Map<String, dynamic>>());
+    if (await review.isAvailable()) {
+      await review.requestReview();
+    } else {
+      await review.openStoreListing();
     }
-    return all.take(6).toList();
   } catch (_) {
-    return [];
+    // Reviewing is optional; ignore failures (e.g. store unavailable).
   }
-});
-
-final _profileSummaryProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  final api = ref.watch(apiClientProvider);
-  try {
-    final profiles = await api.getList('/api/v1/business-profile/');
-    if (profiles.isEmpty) return {'count': 0, 'score': 0, 'status': ''};
-    final first = profiles.first as Map<String, dynamic>;
-    return {
-      'count': profiles.length,
-      'score': first['completeness_score'] ?? 0,
-      'status': first['publish_status']?.toString() ?? '',
-    };
-  } catch (_) {
-    return {'count': 0, 'score': 0, 'status': ''};
-  }
-});
+}
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Prompt for an app update once the dashboard is shown (Android/Play only).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(appUpdateServiceProvider).maybePromptUpdate();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -116,7 +79,11 @@ class _CreateBar extends StatelessWidget {
     return Container(
       color: Colors.white,
       padding: EdgeInsets.fromLTRB(
-          16, 10, 16, MediaQuery.of(context).padding.bottom + 10),
+        16,
+        10,
+        16,
+        MediaQuery.of(context).padding.bottom + 10,
+      ),
       child: SizedBox(
         height: 52,
         child: ElevatedButton.icon(
@@ -153,11 +120,11 @@ class _CreateSheet extends StatelessWidget {
   const _CreateSheet();
 
   static const _items = [
-    ('Invoice',    Icons.receipt_long_outlined,   '/invoices'),
-    ('Receipt',    Icons.receipt_outlined,        '/receipts'),
-    ('Waybill',    Icons.local_shipping_outlined, '/waybills'),
-    ('Quotation',  Icons.request_quote_outlined,  '/quotations'),
-    ('Letterhead', Icons.mail_outline_rounded,    '/letterheads'),
+    ('Invoice', Icons.receipt_long_outlined, '/invoices'),
+    ('Receipt', Icons.receipt_outlined, '/receipts'),
+    ('Waybill', Icons.local_shipping_outlined, '/waybills'),
+    ('Quotation', Icons.request_quote_outlined, '/quotations'),
+    ('Letterhead', Icons.mail_outline_rounded, '/letterheads'),
   ];
 
   @override
@@ -168,14 +135,19 @@ class _CreateSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
-          16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
+        16,
+        16,
+        16,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
             child: Container(
-              width: 36, height: 4,
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
                 color: TopwebsuiteTheme.border,
                 borderRadius: BorderRadius.circular(2),
@@ -183,9 +155,11 @@ class _CreateSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Create New Document',
+          const Text(
+            'Create New Document',
             style: TextStyle(
-              fontSize: 16, fontWeight: FontWeight.w800,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
               color: TopwebsuiteTheme.ink,
             ),
           ),
@@ -193,23 +167,31 @@ class _CreateSheet extends StatelessWidget {
           for (final item in _items)
             ListTile(
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 4, vertical: 2),
+                horizontal: 4,
+                vertical: 2,
+              ),
               leading: Container(
-                width: 40, height: 40,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: TopwebsuiteTheme.primarySoft,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(item.$2, size: 18, color: TopwebsuiteTheme.primary),
               ),
-              title: Text(item.$1,
+              title: Text(
+                item.$1,
                 style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
                   color: TopwebsuiteTheme.ink,
                 ),
               ),
-              trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                  size: 13, color: TopwebsuiteTheme.muted),
+              trailing: const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 13,
+                color: TopwebsuiteTheme.muted,
+              ),
               onTap: () {
                 Navigator.pop(context);
                 context.go(item.$3);
@@ -229,16 +211,20 @@ class _AppDrawer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     const menuItems = [
-      _DrawerItem('Dashboard',        Icons.speed_rounded,             '/'),
-      _DrawerItem('Invoices',         Icons.receipt_long_outlined,     '/invoices'),
-      _DrawerItem('Receipts',         Icons.receipt_outlined,          '/receipts'),
-      _DrawerItem('Waybills',         Icons.local_shipping_outlined,   '/waybills'),
-      _DrawerItem('Quotations',       Icons.request_quote_outlined,    '/quotations'),
-      _DrawerItem('Letterheads',      Icons.mail_outline_rounded,      '/letterheads'),
-      _DrawerItem('Business Profile', Icons.storefront_outlined,       '/business-profile'),
-      _DrawerItem('CRM',              Icons.groups_2_outlined,         '/crm'),
-      _DrawerItem('ERP',              Icons.inventory_2_outlined,      '/erp'),
-      _DrawerItem('Billing',          Icons.workspace_premium_outlined,'/billing'),
+      _DrawerItem('Dashboard', Icons.speed_rounded, '/'),
+      _DrawerItem('Invoices', Icons.receipt_long_outlined, '/invoices'),
+      _DrawerItem('Receipts', Icons.receipt_outlined, '/receipts'),
+      _DrawerItem('Waybills', Icons.local_shipping_outlined, '/waybills'),
+      _DrawerItem('Quotations', Icons.request_quote_outlined, '/quotations'),
+      _DrawerItem('Letterheads', Icons.mail_outline_rounded, '/letterheads'),
+      _DrawerItem(
+        'Business Profile',
+        Icons.storefront_outlined,
+        '/business-profile',
+      ),
+      _DrawerItem('CRM', Icons.groups_2_outlined, '/crm'),
+      _DrawerItem('ERP', Icons.inventory_2_outlined, '/erp'),
+      _DrawerItem('Billing', Icons.workspace_premium_outlined, '/billing'),
     ];
 
     return Drawer(
@@ -258,23 +244,29 @@ class _AppDrawer extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Topwebsuite',
+                        Text(
+                          'Topwebsuite',
                           style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                             color: TopwebsuiteTheme.ink,
                           ),
                         ),
-                        Text('Dashboard',
+                        Text(
+                          'Dashboard',
                           style: TextStyle(
-                            fontSize: 12, color: TopwebsuiteTheme.muted,
+                            fontSize: 12,
+                            color: TopwebsuiteTheme.muted,
                           ),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded,
-                        color: TopwebsuiteTheme.muted),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: TopwebsuiteTheme.muted,
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -287,10 +279,13 @@ class _AppDrawer extends ConsumerWidget {
               padding: EdgeInsets.fromLTRB(20, 14, 20, 8),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('MAIN MENU',
+                child: Text(
+                  'MAIN MENU',
                   style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.w700,
-                    letterSpacing: 0.12, color: Color(0xFF94A3B8),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.12,
+                    color: Color(0xFF94A3B8),
                   ),
                 ),
               ),
@@ -303,7 +298,8 @@ class _AppDrawer extends ConsumerWidget {
                 itemCount: menuItems.length,
                 itemBuilder: (context, i) {
                   final item = menuItems[i];
-                  final isActive = item.route == '/' &&
+                  final isActive =
+                      item.route == '/' &&
                       GoRouterState.of(context).matchedLocation == '/';
                   return _DrawerMenuItem(item: item, isActive: isActive);
                 },
@@ -316,23 +312,31 @@ class _AppDrawer extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: ListTile(
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 leading: Container(
-                  width: 38, height: 38,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.logout_rounded,
-                      size: 17, color: TopwebsuiteTheme.danger),
-                ),
-                title: const Text('Logout',
-                  style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600,
+                  child: const Icon(
+                    Icons.logout_rounded,
+                    size: 17,
                     color: TopwebsuiteTheme.danger,
                   ),
                 ),
-                subtitle: const Text('End this session',
+                title: const Text(
+                  'Logout',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: TopwebsuiteTheme.danger,
+                  ),
+                ),
+                subtitle: const Text(
+                  'End this session',
                   style: TextStyle(fontSize: 11, color: TopwebsuiteTheme.muted),
                 ),
                 onTap: () {
@@ -365,21 +369,28 @@ class _DrawerMenuItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: ListTile(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         tileColor: isActive ? TopwebsuiteTheme.primarySoft : null,
         leading: Container(
-          width: 38, height: 38,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
-            color: isActive ? TopwebsuiteTheme.primary : const Color(0xFFF1F5F9),
+            color: isActive
+                ? TopwebsuiteTheme.primary
+                : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(item.icon, size: 17,
-              color: isActive ? Colors.white : TopwebsuiteTheme.primary),
+          child: Icon(
+            item.icon,
+            size: 17,
+            color: isActive ? Colors.white : TopwebsuiteTheme.primary,
+          ),
         ),
-        title: Text(item.label,
+        title: Text(
+          item.label,
           style: TextStyle(
-            fontSize: 14, fontWeight: FontWeight.w600,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
             color: isActive ? TopwebsuiteTheme.primary : TopwebsuiteTheme.ink,
           ),
         ),
@@ -404,7 +415,11 @@ class _TopBar extends ConsumerWidget {
     return Container(
       color: TopwebsuiteTheme.primary,
       padding: EdgeInsets.fromLTRB(
-          10, MediaQuery.of(context).padding.top + 8, 10, 8),
+        10,
+        MediaQuery.of(context).padding.top + 8,
+        10,
+        8,
+      ),
       child: Row(
         children: [
           // Hamburger
@@ -423,17 +438,24 @@ class _TopBar extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(
                   children: [
-                    Icon(Icons.search_rounded,
-                        size: 18, color: Colors.white.withValues(alpha: 0.8)),
+                    Icon(
+                      Icons.search_rounded,
+                      size: 18,
+                      color: Colors.white.withValues(alpha: 0.8),
+                    ),
                     const SizedBox(width: 8),
-                    Text('Search documents...',
+                    Text(
+                      'Search documents...',
                       style: TextStyle(
-                        fontSize: 13, color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.7),
                       ),
                     ),
                   ],
@@ -470,6 +492,7 @@ class _TopBar extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (_) => _UserMenuSheet(user: user),
     );
   }
@@ -485,7 +508,8 @@ class _TopIconBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 40, height: 40,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(12),
@@ -503,21 +527,27 @@ class _UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initials = name.trim().isEmpty ? 'U'
+    final initials = name.trim().isEmpty
+        ? 'U'
         : name.trim().split(' ').map((w) => w[0]).take(2).join().toUpperCase();
     return Container(
-      width: 40, height: 40,
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [TopwebsuiteTheme.primary, Color(0xFF5B9FE8)],
         ),
         borderRadius: BorderRadius.circular(13),
       ),
       alignment: Alignment.center,
-      child: Text(initials,
+      child: Text(
+        initials,
         style: const TextStyle(
-          color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14,
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 14,
         ),
       ),
     );
@@ -531,92 +561,125 @@ class _UserMenuSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: EdgeInsets.fromLTRB(
-          16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Center(
-            child: Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(
-                color: TopwebsuiteTheme.border,
-                borderRadius: BorderRadius.circular(2),
+      // Scrollable so the menu never overflows on short screens.
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(context).padding.bottom + 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: TopwebsuiteTheme.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // User header
-          if (user != null)
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: TopwebsuiteTheme.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: TopwebsuiteTheme.border),
-              ),
-              child: Row(
-                children: [
-                  _UserAvatar(name: user.displayName ?? ''),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(user.displayName ?? '',
-                          style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w800,
-                            color: TopwebsuiteTheme.ink,
+            // User header
+            if (user != null)
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: TopwebsuiteTheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: TopwebsuiteTheme.border),
+                ),
+                child: Row(
+                  children: [
+                    _UserAvatar(name: user.displayName ?? ''),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user.displayName ?? '',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: TopwebsuiteTheme.ink,
+                            ),
                           ),
-                        ),
-                        Text(user.email ?? '',
-                          style: const TextStyle(
-                            fontSize: 12, color: TopwebsuiteTheme.muted,
+                          Text(
+                            user.email ?? '',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: TopwebsuiteTheme.muted,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-          // Menu items
-          _UserMenuItem(
-            icon: Icons.person_outline_rounded,
-            label: 'User Profile',
-            subtitle: 'Update your business details',
-            onTap: () { Navigator.pop(context); context.push('/account'); },
-          ),
-          _UserMenuItem(
-            icon: Icons.settings_outlined,
-            label: 'Settings',
-            subtitle: 'Account and preferences',
-            onTap: () { Navigator.pop(context); context.push('/account'); },
-          ),
-          _UserMenuItem(
-            icon: Icons.workspace_premium_outlined,
-            label: 'Upgrade Plan',
-            subtitle: 'Manage subscription',
-            onTap: () { Navigator.pop(context); context.push('/billing'); },
-          ),
-          _UserMenuItem(
-            icon: Icons.logout_rounded,
-            label: 'Logout',
-            subtitle: 'End this session',
-            destructive: true,
-            onTap: () {
-              Navigator.pop(context);
-              ref.read(authControllerProvider.notifier).logout();
-            },
-          ),
-        ],
+            // Menu items
+            _UserMenuItem(
+              icon: Icons.person_outline_rounded,
+              label: 'User Profile',
+              subtitle: 'Update your business details',
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/account');
+              },
+            ),
+            _UserMenuItem(
+              icon: Icons.settings_outlined,
+              label: 'Settings',
+              subtitle: 'Account and preferences',
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/account');
+              },
+            ),
+            _UserMenuItem(
+              icon: Icons.workspace_premium_outlined,
+              label: 'Upgrade Plan',
+              subtitle: 'Manage subscription',
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/billing');
+              },
+            ),
+            _UserMenuItem(
+              icon: Icons.star_outline_rounded,
+              label: 'Rate this app',
+              subtitle: 'Leave a review on the store',
+              onTap: () {
+                Navigator.pop(context);
+                rateApp();
+              },
+            ),
+            _UserMenuItem(
+              icon: Icons.logout_rounded,
+              label: 'Logout',
+              subtitle: 'End this session',
+              destructive: true,
+              onTap: () {
+                Navigator.pop(context);
+                ref.read(authControllerProvider.notifier).logout();
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -642,18 +705,32 @@ class _UserMenuItem extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
       leading: Container(
-        width: 40, height: 40,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
-          color: destructive ? const Color(0xFFFEF2F2) : TopwebsuiteTheme.primarySoft,
+          color: destructive
+              ? const Color(0xFFFEF2F2)
+              : TopwebsuiteTheme.primarySoft,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, size: 18,
-            color: destructive ? TopwebsuiteTheme.danger : TopwebsuiteTheme.primary),
+        child: Icon(
+          icon,
+          size: 18,
+          color: destructive
+              ? TopwebsuiteTheme.danger
+              : TopwebsuiteTheme.primary,
+        ),
       ),
-      title: Text(label,
-        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
-      subtitle: Text(subtitle,
+      subtitle: Text(
+        subtitle,
         style: const TextStyle(fontSize: 11, color: TopwebsuiteTheme.muted),
       ),
       onTap: onTap,
@@ -668,20 +745,18 @@ class _HomeBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(dashboardControllerProvider);
+    final data = async.value ?? DashboardData.empty;
+    final loading = async.isLoading && async.value == null;
+    final summaryMap = {'subscription': data.subscription, 'usage': data.usage};
+
     return RefreshIndicator(
       color: TopwebsuiteTheme.primary,
-      onRefresh: () async {
-        ref.invalidate(dashboardSummaryProvider);
-        ref.invalidate(_docCountProvider);
-        ref.invalidate(_recentDocsProvider);
-        ref.invalidate(_profileSummaryProvider);
-      },
+      onRefresh: () => ref.read(dashboardControllerProvider.notifier).refresh(),
       child: CustomScrollView(
         slivers: [
           // Top bar
-          SliverToBoxAdapter(
-            child: Builder(builder: (ctx) => _TopBar()),
-          ),
+          SliverToBoxAdapter(child: Builder(builder: (ctx) => _TopBar())),
           const SliverToBoxAdapter(
             child: Divider(height: 1, color: TopwebsuiteTheme.border),
           ),
@@ -694,37 +769,28 @@ class _HomeBody extends ConsumerWidget {
             ),
           ),
 
-          // ── Action tiles 2-col grid
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: const SliverToBoxAdapter(child: _ActionTilesGrid()),
+          // ── Action tiles 2-col grid (cards self-stagger in)
+          const SliverPadding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverToBoxAdapter(child: _ActionTilesGrid()),
           ),
 
           // ── PLAN + PROFILE compact panels
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Consumer(
-                builder: (context, ref, _) {
-                  final summary = ref.watch(dashboardSummaryProvider);
-                  final profile = ref.watch(_profileSummaryProvider);
-                  return summary.when(
-                    data: (data) => Column(
-                      children: [
-                        _PlanCompactPanel(data: data),
-                        const SizedBox(height: 12),
-                        profile.when(
-                          data: (p) => _ProfileCompactPanel(profile: p),
-                          loading: () => const _Shimmer(height: 110),
-                          error: (_, __) => const SizedBox.shrink(),
-                        ),
-                      ],
+              child: loading
+                  ? const _Shimmer(height: 230)
+                  : EntranceAnimation(
+                      delay: const Duration(milliseconds: 70),
+                      child: Column(
+                        children: [
+                          _PlanCompactPanel(data: summaryMap),
+                          const SizedBox(height: 12),
+                          _ProfileCompactPanel(profile: data.profile),
+                        ],
+                      ),
                     ),
-                    loading: () => const _Shimmer(height: 230),
-                    error: (_, __) => const SizedBox.shrink(),
-                  );
-                },
-              ),
             ),
           ),
 
@@ -732,16 +798,9 @@ class _HomeBody extends ConsumerWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Consumer(
-                builder: (context, ref, _) {
-                  final counts = ref.watch(_docCountProvider);
-                  return counts.when(
-                    data: (data) => _StatsGrid(counts: data),
-                    loading: () => const _Shimmer(height: 160),
-                    error: (_, __) => const SizedBox.shrink(),
-                  );
-                },
-              ),
+              child: loading
+                  ? const _Shimmer(height: 160)
+                  : _StatsGrid(counts: data.counts),
             ),
           ),
 
@@ -749,16 +808,12 @@ class _HomeBody extends ConsumerWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Consumer(
-                builder: (context, ref, _) {
-                  final docs = ref.watch(_recentDocsProvider);
-                  return docs.when(
-                    data: (items) => _RecentDocsPanel(docs: items),
-                    loading: () => const _Shimmer(height: 200),
-                    error: (_, __) => const SizedBox.shrink(),
-                  );
-                },
-              ),
+              child: loading
+                  ? const _Shimmer(height: 200)
+                  : EntranceAnimation(
+                      delay: const Duration(milliseconds: 210),
+                      child: _RecentDocsPanel(docs: data.recentDocs),
+                    ),
             ),
           ),
 
@@ -766,16 +821,12 @@ class _HomeBody extends ConsumerWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Consumer(
-                builder: (context, ref, _) {
-                  final summary = ref.watch(dashboardSummaryProvider);
-                  return summary.when(
-                    data: (data) => _SidePanels(data: data),
-                    loading: () => const _Shimmer(height: 160),
-                    error: (_, __) => const SizedBox.shrink(),
-                  );
-                },
-              ),
+              child: loading
+                  ? const _Shimmer(height: 160)
+                  : EntranceAnimation(
+                      delay: const Duration(milliseconds: 280),
+                      child: _SidePanels(data: summaryMap),
+                    ),
             ),
           ),
 
@@ -808,9 +859,11 @@ class _OverviewHeader extends StatelessWidget {
             children: [
               Icon(Icons.bolt_rounded, size: 13, color: Colors.white),
               SizedBox(width: 4),
-              Text('Overview',
+              Text(
+                'Overview',
                 style: TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),
@@ -818,10 +871,13 @@ class _OverviewHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        const Text('Business Dashboard',
+        const Text(
+          'Business Dashboard',
           style: TextStyle(
-            fontSize: 26, fontWeight: FontWeight.w800,
-            letterSpacing: -0.03, color: Colors.white,
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.03,
+            color: Colors.white,
           ),
         ),
       ],
@@ -833,8 +889,10 @@ class _OverviewHeader extends StatelessWidget {
 
 class _ActionTile {
   const _ActionTile({
-    required this.label, required this.detail,
-    required this.icon,  required this.route,
+    required this.label,
+    required this.detail,
+    required this.icon,
+    required this.route,
     this.primary = false,
   });
   final String label;
@@ -848,14 +906,55 @@ class _ActionTilesGrid extends StatelessWidget {
   const _ActionTilesGrid();
 
   static const _tiles = [
-    _ActionTile(label: 'Invoice',          detail: 'Create new',        icon: Icons.receipt_long_outlined,    route: '/invoices',         primary: true),
-    _ActionTile(label: 'Receipt',          detail: 'Create new',        icon: Icons.receipt_outlined,         route: '/receipts'),
-    _ActionTile(label: 'Waybill',          detail: 'Create new',        icon: Icons.local_shipping_outlined,  route: '/waybills'),
-    _ActionTile(label: 'Quotation',        detail: 'Create new',        icon: Icons.request_quote_outlined,   route: '/quotations'),
-    _ActionTile(label: 'Letterhead',       detail: 'Manage letters',    icon: Icons.mail_outline_rounded,     route: '/letterheads'),
-    _ActionTile(label: 'Business Profile', detail: 'Manage listing',    icon: Icons.storefront_outlined,      route: '/business-profile'),
-    _ActionTile(label: 'CRM',              detail: 'Track pipeline',    icon: Icons.groups_2_outlined,        route: '/crm'),
-    _ActionTile(label: 'ERP',              detail: 'Manage operations', icon: Icons.inventory_2_outlined,     route: '/erp'),
+    _ActionTile(
+      label: 'Invoice',
+      detail: 'Create new',
+      icon: Icons.receipt_long_outlined,
+      route: '/invoices',
+      primary: true,
+    ),
+    _ActionTile(
+      label: 'Receipt',
+      detail: 'Create new',
+      icon: Icons.receipt_outlined,
+      route: '/receipts',
+    ),
+    _ActionTile(
+      label: 'Waybill',
+      detail: 'Create new',
+      icon: Icons.local_shipping_outlined,
+      route: '/waybills',
+    ),
+    _ActionTile(
+      label: 'Quotation',
+      detail: 'Create new',
+      icon: Icons.request_quote_outlined,
+      route: '/quotations',
+    ),
+    _ActionTile(
+      label: 'Letterhead',
+      detail: 'Manage letters',
+      icon: Icons.mail_outline_rounded,
+      route: '/letterheads',
+    ),
+    _ActionTile(
+      label: 'Business Profile',
+      detail: 'Manage listing',
+      icon: Icons.storefront_outlined,
+      route: '/business-profile',
+    ),
+    _ActionTile(
+      label: 'CRM',
+      detail: 'Track pipeline',
+      icon: Icons.groups_2_outlined,
+      route: '/crm',
+    ),
+    _ActionTile(
+      label: 'ERP',
+      detail: 'Manage operations',
+      icon: Icons.inventory_2_outlined,
+      route: '/erp',
+    ),
   ];
 
   @override
@@ -873,7 +972,11 @@ class _ActionTilesGrid extends StatelessWidget {
             childAspectRatio: 2.0,
           ),
           itemCount: _tiles.length,
-          itemBuilder: (context, i) => _ActionTileCard(tile: _tiles[i]),
+          itemBuilder: (context, i) => EntranceAnimation(
+            delay: Duration(milliseconds: 45 * i),
+            offsetY: 14,
+            child: _ActionTileCard(tile: _tiles[i]),
+          ),
         ),
       ),
     );
@@ -892,25 +995,33 @@ class _ActionTileCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isPrimary ? TopwebsuiteTheme.primary : TopwebsuiteTheme.surface2,
+          color: isPrimary
+              ? TopwebsuiteTheme.primary
+              : TopwebsuiteTheme.surface2,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isPrimary ? TopwebsuiteTheme.primary : const Color(0xFFEAF0F7),
+            color: isPrimary
+                ? TopwebsuiteTheme.primary
+                : const Color(0xFFEAF0F7),
           ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              width: 36, height: 36,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: isPrimary
                     ? Colors.white.withValues(alpha: 0.2)
                     : TopwebsuiteTheme.primarySoft,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(tile.icon, size: 17,
-                color: isPrimary ? Colors.white : TopwebsuiteTheme.primary),
+              child: Icon(
+                tile.icon,
+                size: 17,
+                color: isPrimary ? Colors.white : TopwebsuiteTheme.primary,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -918,22 +1029,27 @@ class _ActionTileCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(tile.label,
+                  Text(
+                    tile.label,
                     style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                       color: isPrimary ? Colors.white : TopwebsuiteTheme.ink,
                     ),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
-                  Text(tile.detail,
+                  Text(
+                    tile.detail,
                     style: TextStyle(
                       fontSize: 11,
                       color: isPrimary
                           ? Colors.white.withValues(alpha: 0.75)
                           : TopwebsuiteTheme.muted,
                     ),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -954,19 +1070,23 @@ class _PlanCompactPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subscription = data['subscription'] as Map<String, dynamic>? ?? {};
-    final usage        = data['usage']        as Map<String, dynamic>? ?? {};
-    final plan         = subscription['plan']?.toString() ?? 'Free';
-    final currency     = subscription['currency']?.toString() ?? '';
-    final billingCur   = subscription['billing_currency']?.toString() ?? '';
-    final used         = (usage['usage_used'] as num?)?.toInt() ?? 0;
-    final limitRaw     = usage['usage_limit'];
-    final isUnlimited  = limitRaw == null;
-    final limit        = isUnlimited ? 0 : (limitRaw as num).toInt();
-    final progress     = isUnlimited || limit == 0
-        ? 0.0 : (used / limit).clamp(0.0, 1.0);
-    final pct          = isUnlimited ? 0 : (progress * 100).round();
-    final planLabel    = [plan, currency, billingCur]
-        .where((s) => s.isNotEmpty).join(' · ');
+    final usage = data['usage'] as Map<String, dynamic>? ?? {};
+    final plan = subscription['plan']?.toString() ?? 'Free';
+    final currency = subscription['currency']?.toString() ?? '';
+    final billingCur = subscription['billing_currency']?.toString() ?? '';
+    final used = (usage['usage_used'] as num?)?.toInt() ?? 0;
+    final limitRaw = usage['usage_limit'];
+    final isUnlimited = limitRaw == null;
+    final limit = isUnlimited ? 0 : (limitRaw as num).toInt();
+    final progress = isUnlimited || limit == 0
+        ? 0.0
+        : (used / limit).clamp(0.0, 1.0);
+    final pct = isUnlimited ? 0 : (progress * 100).round();
+    final planLabel = [
+      plan,
+      currency,
+      billingCur,
+    ].where((s) => s.isNotEmpty).join(' · ');
 
     return _Panel(
       child: Padding(
@@ -977,38 +1097,55 @@ class _PlanCompactPanel extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('PLAN',
+                const Text(
+                  'PLAN',
                   style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w700,
-                    letterSpacing: 0.1, color: Color(0xFF94A3B8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.1,
+                    color: Color(0xFF94A3B8),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF0FDF4),
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: Text(planLabel,
+                  child: Text(
+                    planLabel,
                     style: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
                       color: TopwebsuiteTheme.success,
                     ),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            Text('$pct%',
+            Text(
+              '$pct%',
               style: const TextStyle(
-                fontSize: 32, fontWeight: FontWeight.w800,
-                letterSpacing: -0.04, color: TopwebsuiteTheme.ink,
+                fontSize: 32,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.04,
+                color: TopwebsuiteTheme.ink,
               ),
             ),
             Text(
-              isUnlimited ? 'Unlimited documents' : '$used / $limit documents used',
-              style: const TextStyle(fontSize: 13, color: TopwebsuiteTheme.muted),
+              isUnlimited
+                  ? 'Unlimited documents'
+                  : '$used / $limit documents used',
+              style: const TextStyle(
+                fontSize: 13,
+                color: TopwebsuiteTheme.muted,
+              ),
             ),
             const SizedBox(height: 10),
             ClipRRect(
@@ -1018,7 +1155,9 @@ class _PlanCompactPanel extends StatelessWidget {
                 minHeight: 6,
                 backgroundColor: const Color(0xFFD6E2FB),
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  progress > 0.85 ? TopwebsuiteTheme.warning : TopwebsuiteTheme.primary,
+                  progress > 0.85
+                      ? TopwebsuiteTheme.warning
+                      : TopwebsuiteTheme.primary,
                 ),
               ),
             ),
@@ -1037,8 +1176,8 @@ class _ProfileCompactPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final count  = (profile['count'] as int?) ?? 0;
-    final score  = (profile['score'] as num?)?.toInt() ?? 0;
+    final count = (profile['count'] as int?) ?? 0;
+    final score = (profile['score'] as num?)?.toInt() ?? 0;
     final status = profile['status']?.toString() ?? '';
     final isVerified = status == 'verified';
 
@@ -1051,25 +1190,32 @@ class _ProfileCompactPanel extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('PROFILE',
+                const Text(
+                  'PROFILE',
                   style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w700,
-                    letterSpacing: 0.1, color: Color(0xFF94A3B8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.1,
+                    color: Color(0xFF94A3B8),
                   ),
                 ),
                 if (status.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: isVerified
                           ? const Color(0xFFF0FDF4)
                           : const Color(0xFFFFFBEB),
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    child: Text(status,
+                    child: Text(
+                      status,
                       style: TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                         color: isVerified
                             ? TopwebsuiteTheme.success
                             : TopwebsuiteTheme.warning,
@@ -1079,22 +1225,30 @@ class _ProfileCompactPanel extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Text(count == 0 ? '--' : '$score%',
+            Text(
+              count == 0 ? '--' : '$score%',
               style: const TextStyle(
-                fontSize: 32, fontWeight: FontWeight.w800,
-                letterSpacing: -0.04, color: TopwebsuiteTheme.ink,
+                fontSize: 32,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.04,
+                color: TopwebsuiteTheme.ink,
               ),
             ),
             Text(
               count == 0 ? 'No profiles yet' : '$count profile in workspace',
-              style: const TextStyle(fontSize: 13, color: TopwebsuiteTheme.muted),
+              style: const TextStyle(
+                fontSize: 13,
+                color: TopwebsuiteTheme.muted,
+              ),
             ),
             const SizedBox(height: 10),
             GestureDetector(
               onTap: () => context.go('/business-profile'),
-              child: const Text('Manage profiles',
+              child: const Text(
+                'Manage profiles',
                 style: TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                   color: TopwebsuiteTheme.primary,
                 ),
               ),
@@ -1120,12 +1274,12 @@ class _StatsGrid extends StatelessWidget {
   final Map<String, int> counts;
 
   static const _defs = [
-    _StatDef('Invoices',         'invoices',   Icons.receipt_long_outlined),
-    _StatDef('Receipts',         'receipts',   Icons.receipt_outlined),
-    _StatDef('Waybills',         'waybills',   Icons.local_shipping_outlined),
-    _StatDef('Letters',          'letters',    Icons.mail_outline_rounded),
-    _StatDef('Quotations',       'quotations', Icons.request_quote_outlined),
-    _StatDef('Business Profiles','profiles',   Icons.storefront_outlined),
+    _StatDef('Invoices', 'invoices', Icons.receipt_long_outlined),
+    _StatDef('Receipts', 'receipts', Icons.receipt_outlined),
+    _StatDef('Waybills', 'waybills', Icons.local_shipping_outlined),
+    _StatDef('Letters', 'letters', Icons.mail_outline_rounded),
+    _StatDef('Quotations', 'quotations', Icons.request_quote_outlined),
+    _StatDef('Business Profiles', 'profiles', Icons.storefront_outlined),
   ];
 
   @override
@@ -1140,8 +1294,11 @@ class _StatsGrid extends StatelessWidget {
         childAspectRatio: 1.25,
       ),
       itemCount: _defs.length,
-      itemBuilder: (context, i) =>
-          _StatCard(def: _defs[i], count: counts[_defs[i].key]),
+      itemBuilder: (context, i) => EntranceAnimation(
+        delay: Duration(milliseconds: 45 * i),
+        offsetY: 14,
+        child: _StatCard(def: _defs[i], count: counts[_defs[i].key]),
+      ),
     );
   }
 }
@@ -1160,8 +1317,11 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: TopwebsuiteTheme.border),
         boxShadow: const [
-          BoxShadow(color: Color(0x06024EE0), blurRadius: 10,
-              offset: Offset(0, 3)),
+          BoxShadow(
+            color: Color(0x06024EE0),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
@@ -1171,12 +1331,17 @@ class _StatCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 34, height: 34,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: TopwebsuiteTheme.primarySoft,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(def.icon, size: 16, color: TopwebsuiteTheme.primary),
+                child: Icon(
+                  def.icon,
+                  size: 16,
+                  color: TopwebsuiteTheme.primary,
+                ),
               ),
               const Spacer(),
               Container(
@@ -1185,9 +1350,11 @@ class _StatCard extends StatelessWidget {
                   color: const Color(0xFFF0FDF4),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text('Live',
+                child: const Text(
+                  'Live',
                   style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                     color: TopwebsuiteTheme.success,
                   ),
                 ),
@@ -1201,13 +1368,18 @@ class _StatCard extends StatelessWidget {
               Text(
                 count == null ? '--' : '$count',
                 style: const TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.w800,
-                  letterSpacing: -0.04, color: TopwebsuiteTheme.ink,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.04,
+                  color: TopwebsuiteTheme.ink,
                 ),
               ),
-              Text(def.label,
+              Text(
+                def.label,
                 style: const TextStyle(
-                    fontSize: 12, color: TopwebsuiteTheme.muted),
+                  fontSize: 12,
+                  color: TopwebsuiteTheme.muted,
+                ),
               ),
             ],
           ),
@@ -1234,9 +1406,11 @@ class _RecentDocsPanel extends StatelessWidget {
             child: Row(
               children: [
                 const Expanded(
-                  child: Text('Recent Documents',
+                  child: Text(
+                    'Recent Documents',
                     style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
                       color: TopwebsuiteTheme.ink,
                     ),
                   ),
@@ -1245,15 +1419,20 @@ class _RecentDocsPanel extends StatelessWidget {
                   onTap: () => context.go('/documents'),
                   child: const Row(
                     children: [
-                      Text('View all',
+                      Text(
+                        'View all',
                         style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
                           color: TopwebsuiteTheme.primary,
                         ),
                       ),
                       SizedBox(width: 4),
-                      Icon(Icons.arrow_forward_rounded,
-                          size: 12, color: TopwebsuiteTheme.primary),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 12,
+                        color: TopwebsuiteTheme.primary,
+                      ),
                     ],
                   ),
                 ),
@@ -1288,19 +1467,25 @@ class _EmptyDocs extends StatelessWidget {
       ),
       child: const Row(
         children: [
-          Icon(Icons.access_time_rounded,
-              size: 18, color: TopwebsuiteTheme.muted),
+          Icon(
+            Icons.access_time_rounded,
+            size: 18,
+            color: TopwebsuiteTheme.muted,
+          ),
           SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('No recent documents',
+              Text(
+                'No recent documents',
                 style: TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                   color: TopwebsuiteTheme.ink,
                 ),
               ),
-              Text('Create your first document',
+              Text(
+                'Create your first document',
                 style: TextStyle(fontSize: 11, color: TopwebsuiteTheme.muted),
               ),
             ],
@@ -1318,27 +1503,45 @@ class _DocItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Detect document type from fields
-    final isReceipt    = doc.containsKey('received_from') || doc.containsKey('receipt_number');
-    final isWaybill    = doc.containsKey('waybill_number') || doc.containsKey('recipient_name');
-    final isLetter     = doc.containsKey('content_html') || doc.containsKey('plain_text');
-    final isQuotation  = doc.containsKey('quotation_number');
+    final isReceipt =
+        doc.containsKey('received_from') || doc.containsKey('receipt_number');
+    final isWaybill =
+        doc.containsKey('waybill_number') || doc.containsKey('recipient_name');
+    final isLetter =
+        doc.containsKey('content_html') || doc.containsKey('plain_text');
+    final isQuotation = doc.containsKey('quotation_number');
 
-    final docType = isReceipt ? 'Receipt'
-        : isWaybill   ? 'Waybill'
-        : isLetter    ? 'Letter'
-        : isQuotation ? 'Quotation'
+    final docType = isReceipt
+        ? 'Receipt'
+        : isWaybill
+        ? 'Waybill'
+        : isLetter
+        ? 'Letter'
+        : isQuotation
+        ? 'Quotation'
         : 'Invoice';
 
-    final docIcon = isReceipt ? Icons.receipt_outlined
-        : isWaybill   ? Icons.local_shipping_outlined
-        : isLetter    ? Icons.mail_outline_rounded
-        : isQuotation ? Icons.request_quote_outlined
+    final docIcon = isReceipt
+        ? Icons.receipt_outlined
+        : isWaybill
+        ? Icons.local_shipping_outlined
+        : isLetter
+        ? Icons.mail_outline_rounded
+        : isQuotation
+        ? Icons.request_quote_outlined
         : Icons.receipt_long_outlined;
 
-    final number   = _findStr(doc, ['invoice_number','receipt_number',
-        'waybill_number','quotation_number','title']) ?? docType;
-    final amount   = _findStr(doc, ['total','amount','shipment_value']) ?? '0';
-    final status   = doc['status']?.toString() ?? '';
+    final number =
+        _findStr(doc, [
+          'invoice_number',
+          'receipt_number',
+          'waybill_number',
+          'quotation_number',
+          'title',
+        ]) ??
+        docType;
+    final amount = _findStr(doc, ['total', 'amount', 'shipment_value']) ?? '0';
+    final status = doc['status']?.toString() ?? '';
     final currency = doc['currency']?.toString() ?? '';
 
     return Container(
@@ -1355,7 +1558,8 @@ class _DocItem extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 36, height: 36,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: TopwebsuiteTheme.primarySoft,
                   borderRadius: BorderRadius.circular(10),
@@ -1367,15 +1571,19 @@ class _DocItem extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(number,
+                    Text(
+                      number,
                       style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
                         color: TopwebsuiteTheme.ink,
                       ),
                     ),
-                    Text(docType,
+                    Text(
+                      docType,
                       style: const TextStyle(
-                        fontSize: 11, color: TopwebsuiteTheme.muted,
+                        fontSize: 11,
+                        color: TopwebsuiteTheme.muted,
                       ),
                     ),
                   ],
@@ -1388,9 +1596,11 @@ class _DocItem extends StatelessWidget {
             children: [
               if (status.isNotEmpty) _StatusPill(status: status),
               const SizedBox(width: 8),
-              Text('$currency $amount'.trim(),
+              Text(
+                '$currency $amount'.trim(),
                 style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                   color: TopwebsuiteTheme.ink,
                 ),
               ),
@@ -1420,18 +1630,25 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: bg, borderRadius: BorderRadius.circular(999),
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6, height: 6,
+            width: 6,
+            height: 6,
             decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
           ),
           const SizedBox(width: 5),
-          Text(status,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg),
+          Text(
+            status,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: fg,
+            ),
           ),
         ],
       ),
@@ -1439,14 +1656,14 @@ class _StatusPill extends StatelessWidget {
   }
 
   (Color, Color) _colors(String s) => switch (s.toLowerCase()) {
-    'paid'     => (const Color(0xFFF0FDF4), TopwebsuiteTheme.success),
-    'pending'  => (const Color(0xFFFFFBEB), TopwebsuiteTheme.warning),
-    'overdue'  => (const Color(0xFFFEF2F2), TopwebsuiteTheme.danger),
-    'draft'    => (TopwebsuiteTheme.primarySoft, TopwebsuiteTheme.primary),
-    'final'    => (TopwebsuiteTheme.primarySoft, TopwebsuiteTheme.primary),
+    'paid' => (const Color(0xFFF0FDF4), TopwebsuiteTheme.success),
+    'pending' => (const Color(0xFFFFFBEB), TopwebsuiteTheme.warning),
+    'overdue' => (const Color(0xFFFEF2F2), TopwebsuiteTheme.danger),
+    'draft' => (TopwebsuiteTheme.primarySoft, TopwebsuiteTheme.primary),
+    'final' => (TopwebsuiteTheme.primarySoft, TopwebsuiteTheme.primary),
     'transfer' => (TopwebsuiteTheme.primarySoft, TopwebsuiteTheme.primary),
-    'shipped'  => (TopwebsuiteTheme.primarySoft, TopwebsuiteTheme.primary),
-    _          => (TopwebsuiteTheme.primarySoft, TopwebsuiteTheme.primary),
+    'shipped' => (TopwebsuiteTheme.primarySoft, TopwebsuiteTheme.primary),
+    _ => (TopwebsuiteTheme.primarySoft, TopwebsuiteTheme.primary),
   };
 }
 
@@ -1459,8 +1676,8 @@ class _SidePanels extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subscription = data['subscription'] as Map<String, dynamic>? ?? {};
-    final renewal      = subscription['renewal_date']?.toString() ?? '';
-    final billingCur   = subscription['billing_currency']?.toString() ?? '';
+    final renewal = subscription['renewal_date']?.toString() ?? '';
+    final billingCur = subscription['billing_currency']?.toString() ?? '';
 
     return Column(
       children: [
@@ -1516,7 +1733,8 @@ class _MiniPanel extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  width: 38, height: 38,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     color: TopwebsuiteTheme.primarySoft,
                     borderRadius: BorderRadius.circular(12),
@@ -1528,18 +1746,23 @@ class _MiniPanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title,
+                      Text(
+                        title,
                         style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
                           color: TopwebsuiteTheme.ink,
                         ),
                       ),
                       if (subtitle.isNotEmpty)
-                        Text(subtitle,
+                        Text(
+                          subtitle,
                           style: const TextStyle(
-                            fontSize: 11, color: TopwebsuiteTheme.muted,
+                            fontSize: 11,
+                            color: TopwebsuiteTheme.muted,
                           ),
-                          maxLines: 2, overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                     ],
                   ),
@@ -1553,20 +1776,25 @@ class _MiniPanel extends StatelessWidget {
                 onPressed: onAction,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryAction
-                      ? TopwebsuiteTheme.primary : Colors.white,
+                      ? TopwebsuiteTheme.primary
+                      : Colors.white,
                   foregroundColor: primaryAction
-                      ? Colors.white : TopwebsuiteTheme.ink,
+                      ? Colors.white
+                      : TopwebsuiteTheme.ink,
                   elevation: 0,
-                  side: primaryAction ? null
+                  side: primaryAction
+                      ? null
                       : const BorderSide(color: TopwebsuiteTheme.border),
                   minimumSize: const Size.fromHeight(42),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Text(actionLabel,
+                child: Text(
+                  actionLabel,
                   style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -1592,7 +1820,11 @@ class _Panel extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: TopwebsuiteTheme.border),
         boxShadow: const [
-          BoxShadow(color: Color(0x06024EE0), blurRadius: 16, offset: Offset(0, 4)),
+          BoxShadow(
+            color: Color(0x06024EE0),
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
         ],
       ),
       child: child,

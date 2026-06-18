@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
+import '../../modules/data/reference_data.dart';
 import '../application/auth_controller.dart';
 import '../data/auth_repository.dart';
-import 'widgets/public_auth_chrome.dart';
+import 'widgets/auth_widgets.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -19,8 +20,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _email = TextEditingController();
+  final _country = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
+  String? _countryCode;
   bool _termsAccepted = false;
   bool _loading = false;
   bool _showPassword = false;
@@ -31,6 +34,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   void dispose() {
     _name.dispose();
     _email.dispose();
+    _country.dispose();
     _password.dispose();
     _confirmPassword.dispose();
     super.dispose();
@@ -38,30 +42,32 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = MediaQuery.sizeOf(context).width <= 768;
-
-    return PublicAuthScaffold(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: mobile ? 40 : 30,
-        ),
-        child: WebAuthCard(
-          maxWidth: 700,
-          padding: EdgeInsets.all(mobile ? 35 : 30),
-          child: Form(
-            key: _formKey,
-            child: AutofillGroup(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _SignupHeader(title: 'Create An Account'),
-                  _SignupRow(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SingleChildScrollView(
+        padding: EdgeInsets.zero,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const AuthHeader(
+              title: 'Create your account',
+              subtitle:
+                  'Start generating professional invoices, receipts and more.',
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 30, 24, 32),
+              child: Form(
+                key: _formKey,
+                child: AutofillGroup(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _LabeledTextField(
+                      AuthField(
                         label: 'Full Name',
                         hint: 'Enter your full name',
                         controller: _name,
+                        icon: Icons.person_outline,
                         autofillHints: const [AutofillHints.name],
                         textInputAction: TextInputAction.next,
                         validator: (value) =>
@@ -69,42 +75,55 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             ? 'Full name is required'
                             : null,
                       ),
-                      _LabeledTextField(
+                      const SizedBox(height: 18),
+                      AuthField(
                         label: 'Email Address',
                         hint: 'Enter your email address',
                         controller: _email,
+                        icon: Icons.mail_outline,
                         autofillHints: const [AutofillHints.email],
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
                         validator: _emailValidator,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  _SignupRow(
-                    children: [
-                      _LabeledTextField(
+                      const SizedBox(height: 18),
+                      AuthField(
+                        label: 'Country',
+                        hint: 'Select your country',
+                        controller: _country,
+                        icon: Icons.public_outlined,
+                        readOnly: true,
+                        onTap: _pickCountry,
+                        validator: (_) => _countryCode == null
+                            ? 'Please select your country'
+                            : null,
+                      ),
+                      const SizedBox(height: 18),
+                      AuthField(
                         label: 'Password',
-                        hint: 'Create password',
+                        hint: 'Create a password',
                         controller: _password,
+                        icon: Icons.lock_outline,
                         autofillHints: const [AutofillHints.newPassword],
                         obscureText: !_showPassword,
                         textInputAction: TextInputAction.next,
-                        suffixIcon: _PasswordToggle(
+                        suffixIcon: AuthPasswordToggle(
                           visible: _showPassword,
                           onPressed: () =>
                               setState(() => _showPassword = !_showPassword),
                         ),
                         validator: _passwordValidator,
                       ),
-                      _LabeledTextField(
+                      const SizedBox(height: 18),
+                      AuthField(
                         label: 'Confirm Password',
-                        hint: 'Confirm password',
+                        hint: 'Re-enter your password',
                         controller: _confirmPassword,
+                        icon: Icons.lock_outline,
                         autofillHints: const [AutofillHints.newPassword],
                         obscureText: !_showConfirmPassword,
                         textInputAction: TextInputAction.done,
-                        suffixIcon: _PasswordToggle(
+                        suffixIcon: AuthPasswordToggle(
                           visible: _showConfirmPassword,
                           onPressed: () => setState(
                             () => _showConfirmPassword = !_showConfirmPassword,
@@ -113,61 +132,35 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         validator: _confirmPasswordValidator,
                         onFieldSubmitted: (_) => _loading ? null : _submit(),
                       ),
+                      const SizedBox(height: 18),
+                      _TermsCheckbox(
+                        value: _termsAccepted,
+                        onChanged: (value) =>
+                            setState(() => _termsAccepted = value ?? false),
+                        showError: !_termsAccepted && _message.isNotEmpty,
+                      ),
+                      const SizedBox(height: 22),
+                      if (_message.isNotEmpty)
+                        AuthErrorBanner(message: _message),
+                      AuthPrimaryButton(
+                        label: _loading
+                            ? 'Creating Account...'
+                            : 'Create Account',
+                        loading: _loading,
+                        onPressed: _submit,
+                      ),
+                      const SizedBox(height: 24),
+                      AuthFooterLink(
+                        leading: 'Already have an account? ',
+                        action: 'Login',
+                        onTap: () => context.go('/login'),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  _TermsCheckbox(
-                    value: _termsAccepted,
-                    onChanged: (value) =>
-                        setState(() => _termsAccepted = value ?? false),
-                    showError: !_termsAccepted && _message.isNotEmpty,
-                  ),
-                  const SizedBox(height: 20),
-                  WebPrimaryButton(
-                    label: _loading ? 'Creating Account...' : 'Create Account',
-                    loading: _loading,
-                    onPressed: _submit,
-                  ),
-                  if (_message.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      _message,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.red, fontSize: 14),
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  Text.rich(
-                    TextSpan(
-                      text: 'Already have an account? ',
-                      style: const TextStyle(
-                        color: TopwebsuiteTheme.text,
-                        fontSize: 14,
-                      ),
-                      children: [
-                        WidgetSpan(
-                          alignment: PlaceholderAlignment.baseline,
-                          baseline: TextBaseline.alphabetic,
-                          child: InkWell(
-                            onTap: () => context.go('/login'),
-                            child: const Text(
-                              'Login',
-                              style: TextStyle(
-                                color: Color(0xFF3C68E6),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -217,6 +210,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         email: _email.text.trim(),
         fullName: _name.text.trim(),
         password: _password.text.trim(),
+        country: _countryCode,
       );
       if (!mounted) return;
       await showDialog<void>(
@@ -230,135 +224,171 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       if (mounted) setState(() => _loading = false);
     }
   }
-}
 
-class _SignupHeader extends StatelessWidget {
-  const _SignupHeader({required this.title, this.subtext});
-
-  final String title;
-  final String? subtext;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 40),
-      child: Column(
-        children: [
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: TopwebsuiteTheme.text,
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          if (subtext != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              subtext!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF666666), fontSize: 14),
-            ),
-          ],
-        ],
-      ),
+  Future<void> _pickCountry() async {
+    FocusScope.of(context).unfocus();
+    final selected = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _CountryPickerSheet(),
     );
+    if (selected != null) {
+      setState(() {
+        _countryCode = selected['code']?.toString();
+        _country.text = selected['name']?.toString() ?? '';
+      });
+    }
   }
 }
 
-class _SignupRow extends StatelessWidget {
-  const _SignupRow({required this.children});
-
-  final List<Widget> children;
+class _CountryPickerSheet extends ConsumerStatefulWidget {
+  const _CountryPickerSheet();
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth <= 560) {
-          return Column(
-            children: [
-              for (var index = 0; index < children.length; index += 1) ...[
-                children[index],
-                if (index != children.length - 1) const SizedBox(height: 20),
-              ],
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: children.first),
-            const SizedBox(width: 20),
-            Expanded(child: children.last),
-          ],
-        );
-      },
-    );
-  }
+  ConsumerState<_CountryPickerSheet> createState() =>
+      _CountryPickerSheetState();
 }
 
-class _LabeledTextField extends StatelessWidget {
-  const _LabeledTextField({
-    required this.label,
-    required this.hint,
-    required this.controller,
-    this.validator,
-    this.keyboardType,
-    this.obscureText = false,
-    this.suffixIcon,
-    this.autofillHints,
-    this.textInputAction,
-    this.onFieldSubmitted,
-  });
-
-  final String label;
-  final String hint;
-  final TextEditingController controller;
-  final String? Function(String?)? validator;
-  final TextInputType? keyboardType;
-  final bool obscureText;
-  final Widget? suffixIcon;
-  final Iterable<String>? autofillHints;
-  final TextInputAction? textInputAction;
-  final ValueChanged<String>? onFieldSubmitted;
+class _CountryPickerSheetState extends ConsumerState<_CountryPickerSheet> {
+  String _query = '';
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        WebFieldLabel(label),
-        TextFormField(
-          controller: controller,
-          validator: validator,
-          keyboardType: keyboardType,
-          obscureText: obscureText,
-          autofillHints: autofillHints,
-          textInputAction: textInputAction,
-          onFieldSubmitted: onFieldSubmitted,
-          style: const TextStyle(fontSize: 14),
-          decoration: webInputDecoration(hint, suffixIcon: suffixIcon),
+    final countries = ref.watch(countriesProvider);
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (context, scrollCtrl) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-      ],
-    );
-  }
-}
-
-class _PasswordToggle extends StatelessWidget {
-  const _PasswordToggle({required this.visible, required this.onPressed});
-
-  final bool visible;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      color: const Color(0xFF888888),
-      icon: Icon(visible ? Icons.visibility_off : Icons.visibility),
-      tooltip: visible ? 'Hide password' : 'Show password',
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: TopwebsuiteTheme.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 14, 16, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Select your country',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: TopwebsuiteTheme.ink,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: TextField(
+                onChanged: (v) => setState(() => _query = v.toLowerCase()),
+                decoration: InputDecoration(
+                  hintText: 'Search country...',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  isDense: true,
+                  filled: true,
+                  fillColor: TopwebsuiteTheme.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: TopwebsuiteTheme.border,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: TopwebsuiteTheme.border,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: TopwebsuiteTheme.primary,
+                      width: 1.4,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: countries.when(
+                data: (list) {
+                  final filtered = list
+                      .where(
+                        (c) => (c['name']?.toString() ?? '')
+                            .toLowerCase()
+                            .contains(_query),
+                      )
+                      .toList();
+                  if (filtered.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'No countries found',
+                        style: TextStyle(color: TopwebsuiteTheme.muted),
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    controller: scrollCtrl,
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) {
+                      final c = filtered[i];
+                      return ListTile(
+                        title: Text(
+                          c['name']?.toString() ?? '',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: TopwebsuiteTheme.ink,
+                          ),
+                        ),
+                        trailing: Text(
+                          c['code']?.toString() ?? '',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: TopwebsuiteTheme.muted,
+                          ),
+                        ),
+                        onTap: () => Navigator.pop(context, c),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(
+                  child: CircularProgressIndicator(
+                    color: TopwebsuiteTheme.primary,
+                  ),
+                ),
+                error: (_, __) => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'Could not load countries. Check your connection.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: TopwebsuiteTheme.muted),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -380,31 +410,44 @@ class _TermsCheckbox extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
               height: 24,
               width: 24,
-              child: Checkbox(value: value, onChanged: onChanged),
+              child: Checkbox(
+                value: value,
+                onChanged: onChanged,
+                activeColor: TopwebsuiteTheme.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
             ),
             const SizedBox(width: 10),
-            Expanded(
+            const Expanded(
               child: Text.rich(
-                const TextSpan(
+                TextSpan(
                   text: 'I agree to the ',
                   children: [
                     TextSpan(
                       text: 'Terms',
-                      style: TextStyle(color: Color(0xFF3C68E6)),
+                      style: TextStyle(
+                        color: TopwebsuiteTheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     TextSpan(text: ' and '),
                     TextSpan(
                       text: 'Privacy Policy',
-                      style: TextStyle(color: Color(0xFF3C68E6)),
+                      style: TextStyle(
+                        color: TopwebsuiteTheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
-                style: const TextStyle(fontSize: 14),
+                style: TextStyle(fontSize: 13.5, color: TopwebsuiteTheme.muted),
               ),
             ),
           ],
@@ -413,7 +456,7 @@ class _TermsCheckbox extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'You must agree to the terms and privacy policy',
-            style: TextStyle(color: Color(0xFFD93025), fontSize: 13),
+            style: TextStyle(color: TopwebsuiteTheme.danger, fontSize: 12.5),
           ),
         ],
       ],
@@ -452,98 +495,103 @@ class _OtpDialogState extends ConsumerState<_OtpDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = MediaQuery.sizeOf(context).width <= 576;
     return Dialog(
-      insetPadding: const EdgeInsets.all(20),
-      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(22),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
-        child: Container(
-          padding: EdgeInsets.fromLTRB(30, mobile ? 42 : 30, 30, 30),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(mobile ? 16 : 18),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x2E000000),
-                blurRadius: 60,
-                offset: Offset(0, 25),
-              ),
-            ],
-          ),
-          child: Stack(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Positioned(
-                top: -18,
-                right: -16,
-                child: IconButton.filled(
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFFF3F4F6),
-                    foregroundColor: const Color(0xFF222222),
-                    fixedSize: const Size(38, 38),
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    foregroundColor: TopwebsuiteTheme.ink,
+                    minimumSize: const Size(36, 36),
                   ),
-                  icon: const Icon(Icons.close),
+                  icon: const Icon(Icons.close, size: 18),
                 ),
               ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _SignupHeader(
-                    title: 'Verify OTP',
-                    subtext: 'Enter the OTP sent to your email address.',
-                  ),
-                  const WebFieldLabel('Email Address'),
-                  TextField(
-                    controller: _email,
-                    readOnly: true,
-                    style: const TextStyle(fontSize: 14),
-                    decoration: webInputDecoration('Enter your email address'),
-                  ),
-                  const SizedBox(height: 20),
-                  const WebFieldLabel('OTP Code'),
-                  TextField(
-                    controller: _otp,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(6),
-                    ],
-                    style: const TextStyle(fontSize: 14),
-                    decoration: webInputDecoration('Enter OTP code'),
-                  ),
-                  if (_message.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _message,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.red, fontSize: 14),
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  WebPrimaryButton(
-                    label: _verifying ? 'Verifying...' : 'Verify OTP',
-                    loading: _verifying,
-                    onPressed: _verify,
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 50,
-                    child: OutlinedButton(
-                      onPressed: _resending ? null : _resend,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF3C68E6),
-                        side: const BorderSide(color: Color(0xFF3C68E6)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        textStyle: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      child: Text(_resending ? 'Sending...' : 'Resend OTP'),
-                    ),
-                  ),
+              const SizedBox(height: 4),
+              const Text(
+                'Verify your email',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800,
+                  color: TopwebsuiteTheme.ink,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Enter the OTP sent to your email address.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  color: TopwebsuiteTheme.muted,
+                ),
+              ),
+              const SizedBox(height: 24),
+              AuthField(
+                label: 'Email Address',
+                hint: 'Enter your email address',
+                controller: _email,
+                icon: Icons.mail_outline,
+                readOnly: true,
+              ),
+              const SizedBox(height: 18),
+              AuthField(
+                label: 'OTP Code',
+                hint: 'Enter OTP code',
+                controller: _otp,
+                icon: Icons.password_outlined,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
                 ],
+              ),
+              if (_message.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text(
+                  _message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: TopwebsuiteTheme.danger,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 22),
+              AuthPrimaryButton(
+                label: _verifying ? 'Verifying...' : 'Verify OTP',
+                loading: _verifying,
+                onPressed: _verify,
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 50,
+                child: OutlinedButton(
+                  onPressed: _resending ? null : _resend,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: TopwebsuiteTheme.primary,
+                    side: const BorderSide(color: TopwebsuiteTheme.primary),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  child: Text(_resending ? 'Sending...' : 'Resend OTP'),
+                ),
               ),
             ],
           ),

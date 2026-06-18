@@ -51,6 +51,7 @@ class AuthRepository {
     required String email,
     required String fullName,
     required String password,
+    String? country,
   }) async {
     ApiException? lastUsernameError;
     for (var attempt = 0; attempt < 4; attempt += 1) {
@@ -61,6 +62,7 @@ class AuthRepository {
           'username': username,
           'full_name': fullName,
           'password': password,
+          if (country != null && country.isNotEmpty) 'country': country,
         }, authenticated: false);
         return;
       } on ApiException catch (error) {

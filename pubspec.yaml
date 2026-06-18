@@ -43,20 +43,24 @@ dependencies:
   share_plus: ^12.0.2
   open_filex: ^4.7.0
   webview_flutter: ^4.13.1
+  webview_flutter_android: ^4.12.0
   image_picker: ^1.2.2
   file_picker: ^11.0.2
   intl: ^0.20.2
+  printing: ^5.13.4
+  pdf: ^3.11.1
   uuid: ^4.5.3
   equatable: ^2.0.8
   connectivity_plus: ^7.1.1
-  google_fonts: ^6.2.1
+  flutter_colorpicker: ^1.1.0
+  in_app_review: ^2.0.10
+  in_app_update: ^4.2.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.3
-  flutter_native_splash: ^2.4.5
 
 flutter_launcher_icons:
   android: "ic_launcher"
@@ -67,13 +71,13 @@ flutter_launcher_icons:
     generate: false
 
 flutter_native_splash:
-  color: "#0274FF"
-  image: "assets/images/topwebsuite-favicon.png"
+  color: "#014EE0"
+  image: "assets/images/splash_logo_globe.png"
   android: true
   ios: true
   android_12:
-    image: "assets/images/topwebsuite-favicon.png"
-    icon_background_color: "#0274FF"
+    image: "assets/images/splash_logo_globe.png"
+    icon_background_color: "#014EE0"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -88,9 +92,20 @@ flutter:
 
   assets:
     - assets/images/topwebsuite-favicon.png
-    - assets/images/topwebsuite-logo.png
-    - assets/images/App Icon.fw.png
-    - assets/images/Splash Screen Image.jpg
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+          weight: 800
 
   # To add assets to your application, add an assets section, like this:
   # assets:

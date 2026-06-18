@@ -6,6 +6,7 @@ import '../../../app/theme.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/services/file_service.dart';
 import '../../../core/utils/api_shapes.dart';
+import '../../../core/widgets/brand_header.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
@@ -36,64 +37,69 @@ class BillingScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: TopwebsuiteTheme.surface,
-      appBar: AppBar(
-        title: const Text('Billing & Plans'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: TopwebsuiteTheme.border),
-        ),
-      ),
-      body: bundle.when(
-        data: (data) => RefreshIndicator(
-          color: TopwebsuiteTheme.primary,
-          onRefresh: () async => ref.invalidate(billingBundleProvider),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _SubscriptionPanel(
-                subscription: _asMap(data['subscription']),
-              ),
-              const SizedBox(height: 16),
-              _PlansSection(
-                plans: _asList(data['plans']),
-                subscription: _asMap(data['subscription']),
-              ),
-              const SizedBox(height: 16),
-              _BillingHistoryPanel(
-                invoices: _asList(data['invoices']),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-        error: (error, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.cloud_off_outlined,
-                    size: 48, color: TopwebsuiteTheme.muted),
-                const SizedBox(height: 12),
-                Text(
-                  error.toString(),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: TopwebsuiteTheme.muted),
+      body: Column(
+        children: [
+          const BrandHeader(title: 'Billing & Plans'),
+          Expanded(
+            child: bundle.when(
+              data: (data) => RefreshIndicator(
+                color: TopwebsuiteTheme.primary,
+                onRefresh: () async => ref.invalidate(billingBundleProvider),
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _SubscriptionPanel(
+                      subscription: _asMap(data['subscription']),
+                    ),
+                    const SizedBox(height: 16),
+                    _PaymentMethodsPanel(
+                      methods:
+                          (_asMap(data['context'])['allowed_payment_methods']
+                                  as List?)
+                              ?.map((e) => e.toString())
+                              .toList() ??
+                          const [],
+                    ),
+                    _PlansSection(
+                      plans: _asList(data['plans']),
+                      subscription: _asMap(data['subscription']),
+                    ),
+                    const SizedBox(height: 16),
+                    _BillingHistoryPanel(invoices: _asList(data['invoices'])),
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                OutlinedButton(
-                  onPressed: () => ref.invalidate(billingBundleProvider),
-                  child: const Text('Retry'),
+              ),
+              error: (error, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.cloud_off_outlined,
+                        size: 48,
+                        color: TopwebsuiteTheme.muted,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        error.toString(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: TopwebsuiteTheme.muted),
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton(
+                        onPressed: () => ref.invalidate(billingBundleProvider),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
             ),
           ),
-        ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        ],
       ),
     );
   }
@@ -115,15 +121,15 @@ class _SubscriptionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final plan       = subscription['plan']?.toString() ?? 'Free';
-    final status     = subscription['status']?.toString() ?? 'active';
-    final renewal    = subscription['renewal_date']?.toString() ?? '';
-    final usedRaw    = subscription['usage_used'];
-    final limitRaw   = subscription['usage_limit'];
-    final used       = (usedRaw as num?)?.toInt() ?? 0;
+    final plan = subscription['plan']?.toString() ?? 'Free';
+    final status = subscription['status']?.toString() ?? 'active';
+    final renewal = subscription['renewal_date']?.toString() ?? '';
+    final usedRaw = subscription['usage_used'];
+    final limitRaw = subscription['usage_limit'];
+    final used = (usedRaw as num?)?.toInt() ?? 0;
     final isUnlimited = limitRaw == null;
-    final limit      = isUnlimited ? 0 : (limitRaw as num).toInt();
-    final progress   = isUnlimited || limit == 0
+    final limit = isUnlimited ? 0 : (limitRaw as num).toInt();
+    final progress = isUnlimited || limit == 0
         ? 0.0
         : (used / limit).clamp(0.0, 1.0);
 
@@ -156,9 +162,7 @@ class _SubscriptionPanel extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              renewal.isEmpty
-                  ? 'No expiry date'
-                  : 'Renews $renewal',
+              renewal.isEmpty ? 'No expiry date' : 'Renews $renewal',
               style: const TextStyle(
                 fontSize: 12,
                 color: TopwebsuiteTheme.muted,
@@ -220,14 +224,12 @@ class _SubscriptionPanel extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _ModuleChip(
-                    label: 'Documents',
-                    enabled: access['documents'] == true),
-                _ModuleChip(
-                    label: 'CRM', enabled: access['crm'] == true),
-                _ModuleChip(
-                    label: 'ERP', enabled: access['erp'] == true),
-                const _ModuleChip(
-                    label: 'Business Profile', enabled: true),
+                  label: 'Documents',
+                  enabled: access['documents'] == true,
+                ),
+                _ModuleChip(label: 'CRM', enabled: access['crm'] == true),
+                _ModuleChip(label: 'ERP', enabled: access['erp'] == true),
+                const _ModuleChip(label: 'Business Profile', enabled: true),
               ],
             ),
           ],
@@ -253,8 +255,11 @@ class _PlanPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.workspace_premium_rounded,
-              size: 12, color: TopwebsuiteTheme.primary),
+          const Icon(
+            Icons.workspace_premium_rounded,
+            size: 12,
+            color: TopwebsuiteTheme.primary,
+          ),
           const SizedBox(width: 5),
           Text(
             plan,
@@ -323,14 +328,10 @@ class _ModuleChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: enabled
-            ? const Color(0xFFF0FDF4)
-            : const Color(0xFFF8FAFC),
+        color: enabled ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: enabled
-              ? const Color(0xFFBBF7D0)
-              : TopwebsuiteTheme.border,
+          color: enabled ? const Color(0xFFBBF7D0) : TopwebsuiteTheme.border,
         ),
       ),
       child: Row(
@@ -339,9 +340,7 @@ class _ModuleChip extends StatelessWidget {
           Icon(
             enabled ? Icons.check_circle_rounded : Icons.cancel_outlined,
             size: 13,
-            color: enabled
-                ? TopwebsuiteTheme.success
-                : TopwebsuiteTheme.muted,
+            color: enabled ? TopwebsuiteTheme.success : TopwebsuiteTheme.muted,
           ),
           const SizedBox(width: 5),
           Text(
@@ -369,7 +368,8 @@ class _PlansSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentSlug = subscription['plan_slug']?.toString() ??
+    final currentSlug =
+        subscription['plan_slug']?.toString() ??
         subscription['plan']?.toString().toLowerCase() ??
         'free';
 
@@ -424,26 +424,67 @@ class _PlansSection extends ConsumerWidget {
     if (slug.isEmpty) return;
 
     final messenger = ScaffoldMessenger.of(context);
+    final api = ref.read(apiClientProvider);
     try {
-      final api = ref.read(apiClientProvider);
       final response = await api.postMap('/api/billing/checkout/', {
         'plan_slug': slug,
-        'success_url': 'https://topwebsuite.online/pricing/?status=successful',
-        'cancel_url': 'https://topwebsuite.online/pricing/?status=cancelled',
+        'success_url': 'https://topwebsuite.online/billing/success',
+        'cancel_url': 'https://topwebsuite.online/billing/cancel',
       });
-      final url = stringValue(response, [
-        'checkout_url',
+      // Checkout details live under `data`.
+      final data = response['data'] is Map
+          ? Map<String, dynamic>.from(response['data'] as Map)
+          : response;
+      final url = stringValue(data, [
         'authorization_url',
+        'checkout_url',
         'url',
       ]);
-      if (url.isEmpty || !context.mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => CheckoutWebView(url: url)),
+      final reference = stringValue(data, ['reference', 'provider_reference']);
+
+      // Free / internal plan: no provider redirect, activate immediately.
+      if (url.isEmpty) {
+        ref.invalidate(billingBundleProvider);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Plan activated successfully.')),
+        );
+        return;
+      }
+
+      if (!context.mounted) return;
+      final resultUrl = await Navigator.of(context).push<String>(
+        MaterialPageRoute(
+          builder: (_) =>
+              CheckoutWebView(url: url, successHost: 'topwebsuite.online'),
+        ),
       );
+      if (resultUrl == null) return; // cancelled or dismissed
+
+      // Verify the payment as the source of truth after redirect.
+      final uri = Uri.tryParse(resultUrl);
+      final txRef =
+          uri?.queryParameters['tx_ref'] ??
+          uri?.queryParameters['reference'] ??
+          reference;
+      final txId = uri?.queryParameters['transaction_id'];
+      final verifyPath = (txId != null && txId.isNotEmpty)
+          ? '/api/billing/verify-payment/?tx_ref=$txRef&transaction_id=$txId'
+          : (txRef.isNotEmpty
+                ? '/api/billing/verify-payment/?reference=$txRef'
+                : '/api/billing/verify-payment/?status=successful');
+      try {
+        await api.getMap(verifyPath);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Payment verified. Plan updated.')),
+        );
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Payment is being confirmed: $e')),
+        );
+      }
+      ref.invalidate(billingBundleProvider);
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 }
@@ -461,8 +502,8 @@ class _PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name     = plan['name']?.toString() ?? plan['slug']?.toString() ?? 'Plan';
-    final price    = plan['price']?.toString() ?? '0.00';
+    final name = plan['name']?.toString() ?? plan['slug']?.toString() ?? 'Plan';
+    final price = plan['price']?.toString() ?? '0.00';
     final currency = plan['currency']?.toString() ?? '';
     final interval = plan['billing_interval']?.toString() ?? 'monthly';
     final docLimit = plan['document_limit'];
@@ -506,7 +547,9 @@ class _PlanCard extends StatelessWidget {
                 if (isCurrent)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: TopwebsuiteTheme.primarySoft,
                       borderRadius: BorderRadius.circular(999),
@@ -562,8 +605,11 @@ class _PlanCard extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 5),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_rounded,
-                          size: 14, color: TopwebsuiteTheme.success),
+                      const Icon(
+                        Icons.check_rounded,
+                        size: 14,
+                        color: TopwebsuiteTheme.success,
+                      ),
                       const SizedBox(width: 7),
                       Expanded(
                         child: Text(
@@ -646,10 +692,7 @@ class _BillingHistoryPanel extends ConsumerWidget {
                 ),
                 child: const Text(
                   'No billing history yet.',
-                  style: TextStyle(
-                    color: TopwebsuiteTheme.muted,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: TopwebsuiteTheme.muted, fontSize: 13),
                 ),
               )
             else
@@ -657,7 +700,9 @@ class _BillingHistoryPanel extends ConsumerWidget {
                 Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: TopwebsuiteTheme.surface2,
                     borderRadius: BorderRadius.circular(12),
@@ -672,8 +717,11 @@ class _BillingHistoryPanel extends ConsumerWidget {
                           color: TopwebsuiteTheme.primarySoft,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.receipt_outlined,
-                            size: 16, color: TopwebsuiteTheme.primary),
+                        child: const Icon(
+                          Icons.receipt_outlined,
+                          size: 16,
+                          color: TopwebsuiteTheme.primary,
+                        ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -699,8 +747,10 @@ class _BillingHistoryPanel extends ConsumerWidget {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.picture_as_pdf_outlined,
-                            size: 18),
+                        icon: const Icon(
+                          Icons.picture_as_pdf_outlined,
+                          size: 18,
+                        ),
                         color: TopwebsuiteTheme.primary,
                         onPressed: () => ref
                             .read(fileServiceProvider)
@@ -720,6 +770,99 @@ class _BillingHistoryPanel extends ConsumerWidget {
 }
 
 // ── Shared widgets ─────────────────────────────────────────────────────────────
+
+class _PaymentMethodsPanel extends StatelessWidget {
+  const _PaymentMethodsPanel({required this.methods});
+
+  final List<String> methods;
+
+  static const _labels = <String, String>{
+    'card': 'Card',
+    'account': 'Bank account',
+    'banktransfer': 'Bank transfer',
+    'bank_transfer': 'Bank transfer',
+    'ussd': 'USSD',
+    'mobilemoney': 'Mobile money',
+    'mobile_money': 'Mobile money',
+    'mpesa': 'M-Pesa',
+    'barter': 'Barter',
+    'qr': 'QR',
+    'credit': 'Pay later',
+  };
+
+  String _label(String code) =>
+      _labels[code.toLowerCase()] ??
+      (code.isEmpty ? code : code[0].toUpperCase() + code.substring(1));
+
+  @override
+  Widget build(BuildContext context) {
+    if (methods.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: _BillingPanel(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Accepted payment methods',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: TopwebsuiteTheme.ink,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Choose your preferred option on the secure checkout page.',
+                style: TextStyle(fontSize: 12, color: TopwebsuiteTheme.muted),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final m in methods)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: TopwebsuiteTheme.primarySoft,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFFDBEAFE)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.payments_outlined,
+                            size: 13,
+                            color: TopwebsuiteTheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _label(m),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: TopwebsuiteTheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _BillingPanel extends StatelessWidget {
   const _BillingPanel({required this.child});
@@ -748,8 +891,18 @@ class _BillingPanel extends StatelessWidget {
 // ── Checkout webview ───────────────────────────────────────────────────────────
 
 class CheckoutWebView extends StatefulWidget {
-  const CheckoutWebView({super.key, required this.url});
+  const CheckoutWebView({
+    super.key,
+    required this.url,
+    required this.successHost,
+  });
+
   final String url;
+
+  /// The host the provider redirects back to once the payment finishes. When
+  /// the webview navigates here, this screen pops with the final URL (or `null`
+  /// if the user cancelled) so the caller can verify the payment.
+  final String successHost;
 
   @override
   State<CheckoutWebView> createState() => _CheckoutWebViewState();
@@ -757,13 +910,40 @@ class CheckoutWebView extends StatefulWidget {
 
 class _CheckoutWebViewState extends State<CheckoutWebView> {
   late final WebViewController _controller;
+  bool _finished = false;
 
   @override
   void initState() {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (request) => _maybeFinish(request.url),
+          onPageStarted: (url) => _maybeFinish(url),
+        ),
+      )
       ..loadRequest(Uri.parse(widget.url));
+  }
+
+  NavigationDecision _maybeFinish(String url) {
+    if (_finished) return NavigationDecision.navigate;
+    final lower = url.toLowerCase();
+    final isReturn =
+        lower.contains(widget.successHost) &&
+        (lower.contains('status=') ||
+            lower.contains('tx_ref') ||
+            lower.contains('transaction_id') ||
+            lower.contains('/billing/'));
+    if (!isReturn) return NavigationDecision.navigate;
+
+    _finished = true;
+    final cancelled =
+        lower.contains('status=cancelled') || lower.contains('/billing/cancel');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop(cancelled ? null : url);
+    });
+    return NavigationDecision.prevent;
   }
 
   @override

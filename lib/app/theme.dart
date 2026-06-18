@@ -1,22 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class TopwebsuiteTheme {
   const TopwebsuiteTheme._();
 
+  /// Bundled Inter family (see pubspec `fonts:`). Loaded from assets, so no
+  /// runtime font fetch on first launch — the biggest cold-start win.
+  static const fontFamily = 'Inter';
+
   // ── Brand colours ─────────────────────────────────────────────────────────
-  static const primary      = Color(0xFF024EE0);
-  static const primaryDark  = Color(0xFF013DAE);
-  static const primarySoft  = Color(0xFFEBF0FD);
-  static const ink          = Color(0xFF0F172A);
-  static const text         = Color(0xFF0F172A);
-  static const muted        = Color(0xFF64748B);
-  static const surface      = Color(0xFFF5F8FC);
-  static const surface2     = Color(0xFFF8FBFF);
-  static const border       = Color(0xFFE2E8F0);
-  static const success      = Color(0xFF16A34A);
-  static const warning      = Color(0xFFF59E0B);
-  static const danger       = Color(0xFFDC2626);
+  static const primary = Color(0xFF014EE0); // company brand color
+  static const primaryDark = Color(0xFF0138A8);
+  static const primarySoft = Color(0xFFEBF0FD);
+
+  /// Premium brand gradient used on splash + auth hero surfaces.
+  static const brandGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF0A5BFF), Color(0xFF014EE0), Color(0xFF0138A8)],
+    stops: [0.0, 0.55, 1.0],
+  );
+  static const ink = Color(0xFF0F172A);
+  static const text = Color(0xFF0F172A);
+  static const muted = Color(0xFF64748B);
+  static const surface = Color(0xFFF5F8FC);
+  static const surface2 = Color(0xFFF8FBFF);
+  static const border = Color(0xFFE2E8F0);
+  static const success = Color(0xFF16A34A);
+  static const warning = Color(0xFFF59E0B);
+  static const danger = Color(0xFFDC2626);
 
   static ThemeData light() {
     final scheme = ColorScheme.fromSeed(
@@ -30,10 +41,10 @@ class TopwebsuiteTheme {
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: surface,
+      fontFamily: fontFamily,
     );
 
     return base.copyWith(
-      textTheme: GoogleFonts.interTextTheme(base.textTheme),
       appBarTheme: AppBarTheme(
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -41,7 +52,8 @@ class TopwebsuiteTheme {
         backgroundColor: Colors.white,
         foregroundColor: ink,
         surfaceTintColor: Colors.white,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: const TextStyle(
+          fontFamily: fontFamily,
           fontSize: 18,
           fontWeight: FontWeight.w800,
           color: ink,
@@ -61,7 +73,10 @@ class TopwebsuiteTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: border),
@@ -90,7 +105,8 @@ class TopwebsuiteTheme {
           ),
           backgroundColor: primary,
           foregroundColor: Colors.white,
-          textStyle: GoogleFonts.inter(
+          textStyle: const TextStyle(
+            fontFamily: fontFamily,
             fontSize: 14,
             fontWeight: FontWeight.w700,
           ),
@@ -104,7 +120,8 @@ class TopwebsuiteTheme {
           ),
           side: const BorderSide(color: border),
           foregroundColor: ink,
-          textStyle: GoogleFonts.inter(
+          textStyle: const TextStyle(
+            fontFamily: fontFamily,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -113,7 +130,8 @@ class TopwebsuiteTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primary,
-          textStyle: GoogleFonts.inter(
+          textStyle: const TextStyle(
+            fontFamily: fontFamily,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -139,11 +157,13 @@ class TopwebsuiteTheme {
         labelColor: primary,
         unselectedLabelColor: muted,
         indicatorColor: primary,
-        labelStyle: GoogleFonts.inter(
+        labelStyle: const TextStyle(
+          fontFamily: fontFamily,
           fontSize: 13,
           fontWeight: FontWeight.w700,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        unselectedLabelStyle: const TextStyle(
+          fontFamily: fontFamily,
           fontSize: 13,
           fontWeight: FontWeight.w500,
         ),
@@ -165,9 +185,10 @@ class TopwebsuiteTheme {
       seedColor: primary,
       brightness: Brightness.dark,
     );
-    final base = ThemeData(useMaterial3: true, colorScheme: scheme);
-    return base.copyWith(
-      textTheme: GoogleFonts.interTextTheme(base.textTheme),
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme,
+      fontFamily: fontFamily,
     );
   }
 }

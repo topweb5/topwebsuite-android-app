@@ -1,19 +1,31 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/api/api_client.dart';
 import '../../../core/services/file_service.dart';
+import '../../modules/data/reference_data.dart';
 import '../../../core/storage/local_store.dart';
-import '../../../core/storage/secure_token_store.dart';
 import '../../../core/utils/api_shapes.dart';
 import '../../../core/widgets/app_logo.dart';
+import '../../../core/widgets/choice_dropdown.dart';
+import '../../../core/widgets/live_web_page_screen.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/resource_repository.dart';
 import '../domain/field_config.dart';
 import '../domain/resource_config.dart';
-import 'resource_workspace_screen.dart'
-    show BackendPreviewScreen, resourceListProvider;
+import 'business_profile_form.dart';
+import 'invoice_form.dart';
+import 'quotation_form.dart';
+import 'receipt_form.dart';
+import 'waybill_form.dart';
+import 'document_preview_screen.dart';
+import 'resource_workspace_screen.dart' show resourceListProvider;
 
 // ── Document workspace screen ─────────────────────────────────────────────────
 
@@ -36,8 +48,8 @@ class DocWorkspaceScreen extends ConsumerStatefulWidget {
 
 class _DocWorkspaceScreenState extends ConsumerState<DocWorkspaceScreen> {
   String _statusFilter = 'all';
-  String _sortOrder   = 'newest';
-  String _search      = '';
+  String _sortOrder = 'newest';
+  String _search = '';
 
   @override
   Widget build(BuildContext context) {
@@ -53,159 +65,175 @@ class _DocWorkspaceScreenState extends ConsumerState<DocWorkspaceScreen> {
         ),
       ),
       child: Scaffold(
-      backgroundColor: Colors.transparent,
-      drawer: const _WorkspaceDrawer(),
-      bottomNavigationBar: _CreateBar(
-        label: _createLabel,
-        onTap: () => _openForm(context, null),
-        extra: widget.letterheadConfig != null
-            ? _ExtraCreateBtn(
-                label: 'Create Letterhead',
-                onTap: () => _openForm(context, null, secondary: true),
-              )
-            : null,
-      ),
-      body: RefreshIndicator(
-        color: TopwebsuiteTheme.primary,
-        onRefresh: () async {
-          ref.invalidate(resourceListProvider(widget.config));
-          if (widget.letterheadConfig != null) {
-            ref.invalidate(resourceListProvider(widget.letterheadConfig!));
-          }
-        },
-        child: CustomScrollView(
-          slivers: [
-            // ── Top bar
-            SliverToBoxAdapter(
-              child: Builder(builder: (ctx) => _WorkspaceTopBar(
-                placeholder: _searchPlaceholder,
-                onSearch: (v) => setState(() => _search = v),
-              )),
-            ),
-            const SliverToBoxAdapter(
-              child: Divider(height: 1, color: TopwebsuiteTheme.border),
-            ),
-
-            // ── Stats grid
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: rows.when(
-                  data: (items) {
-                    final lhCount = widget.letterheadConfig != null
-                        ? (ref.watch(resourceListProvider(widget.letterheadConfig!)).value?.length ?? 0)
-                        : 0;
-                    return _StatsGrid(
-                      docKey: widget.config.key,
-                      items: items,
-                      letterheadCount: lhCount,
-                    );
-                  },
-                  loading: () => _shimmer(160),
-                  error: (_, __) => const SizedBox.shrink(),
-                ),
-              ),
-            ),
-
-            // ── Management card
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                child: _ManagementCard(
-                  title: _managementTitle,
-                  subtitle: _managementSubtitle,
-                  createLabel: _createLabel,
-                  showLetterheadBtn: widget.letterheadConfig != null,
-                  onFilter: _showFilterSheet,
-                  onCreate: () => _openForm(context, null),
-                  onCreateLetterhead: () => _openForm(context, null, secondary: true),
-                ),
-              ),
-            ),
-
-            // ── Filter bar
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _FilterBar(
-                  statusOptions: _statusOptions,
-                  selectedStatus: _statusFilter,
-                  sortOrder: _sortOrder,
-                  search: _search,
-                  onStatusChanged: (v) => setState(() => _statusFilter = v),
-                  onSortChanged: (v) => setState(() => _sortOrder = v),
-                  onSearchChanged: (v) => setState(() => _search = v),
-                  searchPlaceholder: _searchPlaceholder,
-                ),
-              ),
-            ),
-
-            // ── Document list
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: rows.when(
-                  data: (items) {
-                    final filtered = _applyFilters(items);
-                    if (filtered.isEmpty) return _emptyState;
-                    return Column(
-                      children: [
-                        for (final row in filtered)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _DocCard(
-                              config: widget.config,
-                              row: row,
-                              numberKey: _numberKey,
-                              nameKey: _nameKey,
-                              onEdit: () => _openForm(context, row),
-                              onRefresh: () => ref.invalidate(resourceListProvider(widget.config)),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                  loading: () => _shimmer(280),
-                  error: (e, _) => _errorState(e.toString()),
-                ),
-              ),
-            ),
-
-            // ── Tips section
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _TipsCard(docKey: widget.config.key),
-              ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-          ],
+        backgroundColor: Colors.transparent,
+        drawer: const _WorkspaceDrawer(),
+        bottomNavigationBar: _CreateBar(
+          label: _createLabel,
+          onTap: () => _openForm(context, null),
+          extra: widget.letterheadConfig != null
+              ? _ExtraCreateBtn(
+                  label: 'Create Letterhead',
+                  onTap: () => _openForm(context, null, secondary: true),
+                )
+              : null,
         ),
-      ),
-      ),   // closes Scaffold
-    );     // closes Container gradient wrapper
+        body: RefreshIndicator(
+          color: TopwebsuiteTheme.primary,
+          onRefresh: () async {
+            ref.invalidate(resourceListProvider(widget.config));
+            if (widget.letterheadConfig != null) {
+              ref.invalidate(resourceListProvider(widget.letterheadConfig!));
+            }
+          },
+          child: CustomScrollView(
+            slivers: [
+              // ── Top bar
+              SliverToBoxAdapter(
+                child: Builder(
+                  builder: (ctx) => _WorkspaceTopBar(
+                    placeholder: _searchPlaceholder,
+                    onSearch: (v) => setState(() => _search = v),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(
+                child: Divider(height: 1, color: TopwebsuiteTheme.border),
+              ),
+
+              // ── Stats grid
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: rows.when(
+                    data: (items) {
+                      final lhCount = widget.letterheadConfig != null
+                          ? (ref
+                                    .watch(
+                                      resourceListProvider(
+                                        widget.letterheadConfig!,
+                                      ),
+                                    )
+                                    .value
+                                    ?.length ??
+                                0)
+                          : 0;
+                      return _StatsGrid(
+                        docKey: widget.config.key,
+                        items: items,
+                        letterheadCount: lhCount,
+                      );
+                    },
+                    loading: () => _shimmer(160),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+
+              // ── Management card
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  child: _ManagementCard(
+                    title: _managementTitle,
+                    subtitle: _managementSubtitle,
+                    createLabel: _createLabel,
+                    showLetterheadBtn: widget.letterheadConfig != null,
+                    onFilter: _showFilterSheet,
+                    onCreate: () => _openForm(context, null),
+                    onCreateLetterhead: () =>
+                        _openForm(context, null, secondary: true),
+                  ),
+                ),
+              ),
+
+              // ── Filter bar
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: _FilterBar(
+                    statusOptions: _statusOptions,
+                    selectedStatus: _statusFilter,
+                    sortOrder: _sortOrder,
+                    search: _search,
+                    onStatusChanged: (v) => setState(() => _statusFilter = v),
+                    onSortChanged: (v) => setState(() => _sortOrder = v),
+                    onSearchChanged: (v) => setState(() => _search = v),
+                    searchPlaceholder: _searchPlaceholder,
+                  ),
+                ),
+              ),
+
+              // ── Document list
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: rows.when(
+                    data: (items) {
+                      final filtered = _applyFilters(items);
+                      if (filtered.isEmpty) return _emptyState;
+                      return Column(
+                        children: [
+                          for (final row in filtered)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _DocCard(
+                                config: widget.config,
+                                row: row,
+                                numberKey: _numberKey,
+                                nameKey: _nameKey,
+                                onEdit: () => _openForm(context, row),
+                                onRefresh: () => ref.invalidate(
+                                  resourceListProvider(widget.config),
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                    loading: () => _shimmer(280),
+                    error: (e, _) => _errorState(e.toString()),
+                  ),
+                ),
+              ),
+
+              // ── Tips section
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: _TipsCard(docKey: widget.config.key),
+                ),
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            ],
+          ),
+        ),
+      ), // closes Scaffold
+    ); // closes Container gradient wrapper
   }
 
   // ── Per-type config ─────────────────────────────────────────────────────────
 
-  String get _managementTitle => _kManagementTitles[widget.config.key]?.$1
-      ?? '${widget.config.title} Management';
+  String get _managementTitle =>
+      _kManagementTitles[widget.config.key]?.$1 ??
+      '${widget.config.title} Management';
 
-  String get _managementSubtitle => _kManagementTitles[widget.config.key]?.$2
-      ?? 'View, filter and manage your ${widget.config.title.toLowerCase()}.';
+  String get _managementSubtitle =>
+      _kManagementTitles[widget.config.key]?.$2 ??
+      'View, filter and manage your ${widget.config.title.toLowerCase()}.';
 
-  String get _createLabel => _kCreateLabels[widget.config.key]
-      ?? 'Create ${widget.config.title}';
+  String get _createLabel =>
+      _kCreateLabels[widget.config.key] ?? 'Create ${widget.config.title}';
 
-  String get _searchPlaceholder => _kSearchPlaceholders[widget.config.key]
-      ?? 'Search ${widget.config.title.toLowerCase()}...';
+  String get _searchPlaceholder =>
+      _kSearchPlaceholders[widget.config.key] ??
+      'Search ${widget.config.title.toLowerCase()}...';
 
   List<String> get _statusOptions =>
       _kStatusOptions[widget.config.key] ?? const ['all'];
 
   String get _numberKey => _kNumberKeys[widget.config.key] ?? 'title';
-  String get _nameKey   => _kNameKeys[widget.config.key]   ?? 'client_name';
+  String get _nameKey => _kNameKeys[widget.config.key] ?? 'client_name';
 
   // ── Filtering ───────────────────────────────────────────────────────────────
 
@@ -213,11 +241,15 @@ class _DocWorkspaceScreenState extends ConsumerState<DocWorkspaceScreen> {
     var result = items.whereType<Map<String, dynamic>>().toList();
 
     if (_statusFilter != 'all') {
-      result = result.where((r) =>
-          r['status']?.toString().toLowerCase() == _statusFilter ||
-          r['payment_method']?.toString().toLowerCase() == _statusFilter ||
-          r['delivery_status']?.toString().toLowerCase() == _statusFilter
-      ).toList();
+      result = result
+          .where(
+            (r) =>
+                r['status']?.toString().toLowerCase() == _statusFilter ||
+                r['payment_method']?.toString().toLowerCase() ==
+                    _statusFilter ||
+                r['delivery_status']?.toString().toLowerCase() == _statusFilter,
+          )
+          .toList();
     }
 
     if (_search.isNotEmpty) {
@@ -245,6 +277,42 @@ class _DocWorkspaceScreenState extends ConsumerState<DocWorkspaceScreen> {
     bool secondary = false,
   }) async {
     final cfg = secondary ? widget.letterheadConfig! : widget.config;
+
+    // Invoices use the dedicated full-featured form
+    if (cfg.key == 'invoices' && !secondary) {
+      final saved = await InvoiceFormSheet.show(context, existing: row);
+      if (saved == true) ref.invalidate(resourceListProvider(cfg));
+      return;
+    }
+
+    // Receipts use the dedicated full-featured form
+    if (cfg.key == 'receipts' && !secondary) {
+      final saved = await ReceiptFormSheet.show(context, existing: row);
+      if (saved == true) ref.invalidate(resourceListProvider(cfg));
+      return;
+    }
+
+    // Waybills use the dedicated full-featured form
+    if (cfg.key == 'waybills' && !secondary) {
+      final saved = await WaybillFormSheet.show(context, existing: row);
+      if (saved == true) ref.invalidate(resourceListProvider(cfg));
+      return;
+    }
+
+    // Quotations use the dedicated full-featured (invoice-style) form
+    if (cfg.key == 'quotations' && !secondary) {
+      final saved = await QuotationFormSheet.show(context, existing: row);
+      if (saved == true) ref.invalidate(resourceListProvider(cfg));
+      return;
+    }
+
+    // Business profile uses the dedicated full-featured form
+    if (cfg.key == 'business-profile' && !secondary) {
+      final saved = await BusinessProfileFormSheet.show(context, existing: row);
+      if (saved == true) ref.invalidate(resourceListProvider(cfg));
+      return;
+    }
+
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -267,7 +335,7 @@ class _DocWorkspaceScreenState extends ConsumerState<DocWorkspaceScreen> {
         onApply: (status, sort) {
           setState(() {
             _statusFilter = status;
-            _sortOrder    = sort;
+            _sortOrder = sort;
           });
         },
       ),
@@ -285,17 +353,23 @@ class _DocWorkspaceScreenState extends ConsumerState<DocWorkspaceScreen> {
     ),
     child: Column(
       children: [
-        Icon(Icons.folder_open_outlined,
-            size: 44, color: TopwebsuiteTheme.primary.withValues(alpha: 0.5)),
+        Icon(
+          Icons.folder_open_outlined,
+          size: 44,
+          color: TopwebsuiteTheme.primary.withValues(alpha: 0.5),
+        ),
         const SizedBox(height: 12),
-        const Text('No records yet',
+        const Text(
+          'No records yet',
           style: TextStyle(
-            fontSize: 15, fontWeight: FontWeight.w700,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
             color: TopwebsuiteTheme.ink,
           ),
         ),
         const SizedBox(height: 4),
-        const Text('Create your first record or check from the web app.',
+        const Text(
+          'Create your first record or check from the web app.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 12, color: TopwebsuiteTheme.muted),
         ),
@@ -303,16 +377,56 @@ class _DocWorkspaceScreenState extends ConsumerState<DocWorkspaceScreen> {
     ),
   );
 
-  Widget _errorState(String msg) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFEF2F2),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFFCA5A5)),
-    ),
-    child: Text(msg,
-      style: const TextStyle(fontSize: 12, color: TopwebsuiteTheme.danger)),
-  );
+  Widget _errorState(String msg) {
+    // Backend returns "Your plan does not include <module>." (403) when the
+    // current plan lacks access — surface an Upgrade Now link to billing.
+    final isPlanLimited = msg.toLowerCase().contains('does not include');
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFCA5A5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            msg,
+            style: const TextStyle(
+              fontSize: 12,
+              color: TopwebsuiteTheme.danger,
+            ),
+          ),
+          if (isPlanLimited) ...[
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: () => context.push('/billing'),
+              icon: const Icon(Icons.workspace_premium_rounded, size: 16),
+              label: const Text('Upgrade Now'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: TopwebsuiteTheme.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _shimmer(double height) => Container(
     height: height,
@@ -326,51 +440,66 @@ class _DocWorkspaceScreenState extends ConsumerState<DocWorkspaceScreen> {
 // ── Static configs per doc type ───────────────────────────────────────────────
 
 const _kManagementTitles = <String, (String, String)>{
-  'invoices':   ('Invoice Management',    'View, filter and manage your created invoices.'),
-  'receipts':   ('Receipt Management',    'Create, preview, download and update payment receipts.'),
-  'waybills':   ('Waybill Management',    'Create, track and print shipment waybills from one workspace.'),
-  'quotations': ('Quotation Workspace',   'Create, preview, download and update quotations with the invoice-style workflow.'),
-  'letters':    ('Letter Workspace',      'Create and manage branded letters with a focused writing flow.'),
+  'invoices': (
+    'Invoice Management',
+    'View, filter and manage your created invoices.',
+  ),
+  'receipts': (
+    'Receipt Management',
+    'Create, preview, download and update payment receipts.',
+  ),
+  'waybills': (
+    'Waybill Management',
+    'Create, track and print shipment waybills from one workspace.',
+  ),
+  'quotations': (
+    'Quotation Workspace',
+    'Create, preview, download and update quotations with the invoice-style workflow.',
+  ),
+  'letters': (
+    'Letter Workspace',
+    'Create and manage branded letters with a focused writing flow.',
+  ),
 };
 
 const _kCreateLabels = <String, String>{
-  'invoices':   'Create Invoice',
-  'receipts':   'Create Receipt',
-  'waybills':   'Create Waybill',
+  'invoices': 'Create Invoice',
+  'receipts': 'Create Receipt',
+  'waybills': 'Create Waybill',
   'quotations': 'Create Quotation',
-  'letters':    'Write Letter',
+  'letters': 'Write Letter',
 };
 
 const _kSearchPlaceholders = <String, String>{
-  'invoices':   'Invoice no, client name, business name...',
-  'receipts':   'Receipt no, payer name, business name...',
-  'waybills':   'Waybill no, sender, recipient, shipment...',
+  'invoices': 'Invoice no, client name, business name...',
+  'receipts': 'Receipt no, payer name, business name...',
+  'waybills': 'Waybill no, sender, recipient, shipment...',
   'quotations': 'Quotation no, client, company, reference...',
-  'letters':    'Letter title, recipient...',
+  'letters': 'Letter title, recipient...',
 };
 
 const _kStatusOptions = <String, List<String>>{
-  'invoices':   ['all', 'paid', 'pending', 'draft', 'overdue'],
-  'receipts':   ['all', 'cash', 'transfer', 'cheque', 'card'],
-  'waybills':   ['all', 'pending', 'shipped', 'delivered'],
+  'invoices': ['all', 'paid', 'pending', 'draft', 'overdue'],
+  'receipts': ['all', 'cash', 'transfer', 'cheque', 'card'],
+  'waybills': ['all', 'pending', 'shipped', 'delivered'],
   'quotations': ['all', 'open', 'accepted', 'expired', 'draft'],
-  'letters':    ['all', 'draft', 'final'],
+  'letters': ['all', 'draft', 'final'],
 };
 
 const _kNumberKeys = <String, String>{
-  'invoices':   'invoice_number',
-  'receipts':   'receipt_number',
-  'waybills':   'waybill_number',
+  'invoices': 'invoice_number',
+  'receipts': 'receipt_number',
+  'waybills': 'waybill_number',
   'quotations': 'quotation_number',
-  'letters':    'title',
+  'letters': 'title',
 };
 
 const _kNameKeys = <String, String>{
-  'invoices':   'client_name',
-  'receipts':   'received_from',
-  'waybills':   'recipient_name',
+  'invoices': 'client_name',
+  'receipts': 'received_from',
+  'waybills': 'recipient_name',
   'quotations': 'client_name',
-  'letters':    'plain_text',
+  'letters': 'plain_text',
 };
 
 // ── Stats grid ────────────────────────────────────────────────────────────────
@@ -407,65 +536,209 @@ class _StatsGrid extends StatelessWidget {
     final count = items.length;
     switch (docKey) {
       case 'invoices':
-        final total  = _sumField(items, 'total');
-        final paid   = _countWhere(items, 'status', 'paid');
-        final pend   = _countWhere(items, 'status', 'pending');
-        final curr   = _firstCurrency(items);
+        final total = _sumField(items, 'total');
+        final paid = _countWhere(items, 'status', 'paid');
+        final pend = _countWhere(items, 'status', 'pending');
+        final curr = _firstCurrency(items);
         return [
-          _StatSpec(Icons.receipt_long_outlined,  'Live',    _c(TopwebsuiteTheme.success), '$count',     'Total invoices'),
-          _StatSpec(Icons.account_balance_wallet_outlined, 'Value', _c(const Color(0xFF2563EB)), '$curr ${_fmt(total)}', 'Total Invoiced'),
-          _StatSpec(Icons.check_circle_outline,   'Paid',    _c(TopwebsuiteTheme.success), '$paid',      'Paid invoices'),
-          _StatSpec(Icons.access_time_rounded,    'Pending', _c(TopwebsuiteTheme.warning), '$pend',      'Pending Invoices'),
+          _StatSpec(
+            Icons.receipt_long_outlined,
+            'Live',
+            _c(TopwebsuiteTheme.success),
+            '$count',
+            'Total invoices',
+          ),
+          _StatSpec(
+            Icons.account_balance_wallet_outlined,
+            'Value',
+            _c(const Color(0xFF2563EB)),
+            '$curr ${_fmt(total)}',
+            'Total Invoiced',
+          ),
+          _StatSpec(
+            Icons.check_circle_outline,
+            'Paid',
+            _c(TopwebsuiteTheme.success),
+            '$paid',
+            'Paid invoices',
+          ),
+          _StatSpec(
+            Icons.access_time_rounded,
+            'Pending',
+            _c(TopwebsuiteTheme.warning),
+            '$pend',
+            'Pending Invoices',
+          ),
         ];
       case 'receipts':
-        final total  = _sumField(items, 'amount');
+        final total = _sumField(items, 'amount');
         final transf = _countWhere(items, 'payment_method', 'transfer');
-        final today  = _countToday(items, 'date');
-        final curr   = _firstCurrency(items);
+        final today = _countToday(items, 'date');
+        final curr = _firstCurrency(items);
         return [
-          _StatSpec(Icons.receipt_outlined,       'Live',      _c(TopwebsuiteTheme.success), '$count',  'Total receipts'),
-          _StatSpec(Icons.account_balance_wallet_outlined, 'Collected', _c(TopwebsuiteTheme.warning), '$curr ${_fmt(total)}', 'Total value'),
-          _StatSpec(Icons.swap_horiz_rounded,     'Methods',   _c(const Color(0xFF2563EB)), '$transf', 'Transfer receipts'),
-          _StatSpec(Icons.today_rounded,          'Today',     _c(TopwebsuiteTheme.success), '$today',  'Issued today'),
+          _StatSpec(
+            Icons.receipt_outlined,
+            'Live',
+            _c(TopwebsuiteTheme.success),
+            '$count',
+            'Total receipts',
+          ),
+          _StatSpec(
+            Icons.account_balance_wallet_outlined,
+            'Collected',
+            _c(TopwebsuiteTheme.warning),
+            '$curr ${_fmt(total)}',
+            'Total value',
+          ),
+          _StatSpec(
+            Icons.swap_horiz_rounded,
+            'Methods',
+            _c(const Color(0xFF2563EB)),
+            '$transf',
+            'Transfer receipts',
+          ),
+          _StatSpec(
+            Icons.today_rounded,
+            'Today',
+            _c(TopwebsuiteTheme.success),
+            '$today',
+            'Issued today',
+          ),
         ];
       case 'waybills':
-        final weight    = _sumField(items, 'weight');
-        final value     = _sumField(items, 'shipment_value');
+        final weight = _sumField(items, 'weight');
+        final value = _sumField(items, 'shipment_value');
         final delivered = _countWhere(items, 'status', 'delivered');
-        final curr      = _firstCurrency(items);
+        final curr = _firstCurrency(items);
         return [
-          _StatSpec(Icons.local_shipping_outlined,  'Live',      _c(TopwebsuiteTheme.success), '$count',           'Total waybills'),
-          _StatSpec(Icons.scale_outlined,           'Weight',    _c(TopwebsuiteTheme.warning), '${_fmt(weight)} kg','Total shipment weight'),
-          _StatSpec(Icons.account_balance_wallet_outlined, 'Value', _c(const Color(0xFF2563EB)), '$curr ${_fmt(value)}', 'Total shipment value'),
-          _StatSpec(Icons.location_on_outlined,     'Delivered', _c(TopwebsuiteTheme.success), '$delivered',       'Delivered waybills'),
+          _StatSpec(
+            Icons.local_shipping_outlined,
+            'Live',
+            _c(TopwebsuiteTheme.success),
+            '$count',
+            'Total waybills',
+          ),
+          _StatSpec(
+            Icons.scale_outlined,
+            'Weight',
+            _c(TopwebsuiteTheme.warning),
+            '${_fmt(weight)} kg',
+            'Total shipment weight',
+          ),
+          _StatSpec(
+            Icons.account_balance_wallet_outlined,
+            'Value',
+            _c(const Color(0xFF2563EB)),
+            '$curr ${_fmt(value)}',
+            'Total shipment value',
+          ),
+          _StatSpec(
+            Icons.location_on_outlined,
+            'Delivered',
+            _c(TopwebsuiteTheme.success),
+            '$delivered',
+            'Delivered waybills',
+          ),
         ];
       case 'quotations':
-        final total   = _sumField(items, 'total');
-        final open    = _countWhere(items, 'status', 'open');
-        final recent  = _countRecent7Days(items);
-        final curr    = _firstCurrency(items);
+        final total = _sumField(items, 'total');
+        final open = _countWhere(items, 'status', 'open');
+        final recent = _countRecent7Days(items);
+        final curr = _firstCurrency(items);
         return [
-          _StatSpec(Icons.request_quote_outlined,  'Live',   _c(TopwebsuiteTheme.success), '$count',            'Total quotations'),
-          _StatSpec(Icons.account_balance_wallet_outlined, 'Value', _c(TopwebsuiteTheme.warning), '$curr ${_fmt(total)}', 'Total quoted value'),
-          _StatSpec(Icons.check_circle_outline,    'Open',   _c(const Color(0xFF2563EB)), '$open',              'Open quotations'),
-          _StatSpec(Icons.calendar_today_rounded,  'Recent', _c(TopwebsuiteTheme.success), '$recent',           'Updated in 7 days'),
+          _StatSpec(
+            Icons.request_quote_outlined,
+            'Live',
+            _c(TopwebsuiteTheme.success),
+            '$count',
+            'Total quotations',
+          ),
+          _StatSpec(
+            Icons.account_balance_wallet_outlined,
+            'Value',
+            _c(TopwebsuiteTheme.warning),
+            '$curr ${_fmt(total)}',
+            'Total quoted value',
+          ),
+          _StatSpec(
+            Icons.check_circle_outline,
+            'Open',
+            _c(const Color(0xFF2563EB)),
+            '$open',
+            'Open quotations',
+          ),
+          _StatSpec(
+            Icons.calendar_today_rounded,
+            'Recent',
+            _c(TopwebsuiteTheme.success),
+            '$recent',
+            'Updated in 7 days',
+          ),
         ];
       case 'letters':
         final drafts = _countWhere(items, 'status', 'draft');
         final finals = _countWhere(items, 'status', 'final');
         final recent = _countRecent7Days(items);
         return [
-          _StatSpec(Icons.layers_outlined,        'Assets', _c(TopwebsuiteTheme.success), '$letterheadCount', 'Letterhead layouts'),
-          _StatSpec(Icons.description_outlined,   'Drafts', _c(TopwebsuiteTheme.warning), '$drafts',          'Open letters'),
-          _StatSpec(Icons.edit_note_rounded,      'Ready',  _c(TopwebsuiteTheme.success), '$finals',          'Final letters'),
-          _StatSpec(Icons.history_rounded,        'Recent', _c(TopwebsuiteTheme.success), '$recent',          'Updated in 7 days'),
+          _StatSpec(
+            Icons.layers_outlined,
+            'Assets',
+            _c(TopwebsuiteTheme.success),
+            '$letterheadCount',
+            'Letterhead layouts',
+          ),
+          _StatSpec(
+            Icons.description_outlined,
+            'Drafts',
+            _c(TopwebsuiteTheme.warning),
+            '$drafts',
+            'Open letters',
+          ),
+          _StatSpec(
+            Icons.edit_note_rounded,
+            'Ready',
+            _c(TopwebsuiteTheme.success),
+            '$finals',
+            'Final letters',
+          ),
+          _StatSpec(
+            Icons.history_rounded,
+            'Recent',
+            _c(TopwebsuiteTheme.success),
+            '$recent',
+            'Updated in 7 days',
+          ),
         ];
       default:
         return [
-          _StatSpec(Icons.description_outlined, 'Live', _c(TopwebsuiteTheme.success), '$count', 'Total records'),
-          _StatSpec(Icons.check_circle_outline, 'Active', _c(const Color(0xFF2563EB)), '$count', 'Active'),
-          _StatSpec(Icons.pending_outlined, 'Pending', _c(TopwebsuiteTheme.warning), '0', 'Pending'),
-          _StatSpec(Icons.calendar_today_rounded, 'Recent', _c(TopwebsuiteTheme.success), '0', 'Recent'),
+          _StatSpec(
+            Icons.description_outlined,
+            'Live',
+            _c(TopwebsuiteTheme.success),
+            '$count',
+            'Total records',
+          ),
+          _StatSpec(
+            Icons.check_circle_outline,
+            'Active',
+            _c(const Color(0xFF2563EB)),
+            '$count',
+            'Active',
+          ),
+          _StatSpec(
+            Icons.pending_outlined,
+            'Pending',
+            _c(TopwebsuiteTheme.warning),
+            '0',
+            'Pending',
+          ),
+          _StatSpec(
+            Icons.calendar_today_rounded,
+            'Recent',
+            _c(TopwebsuiteTheme.success),
+            '0',
+            'Recent',
+          ),
         ];
     }
   }
@@ -480,15 +753,21 @@ class _StatsGrid extends StatelessWidget {
     return sum;
   }
 
-  static int _countWhere(List<Map<String, dynamic>> items, String field, String value) =>
-      items.where((r) => r[field]?.toString().toLowerCase() == value).length;
+  static int _countWhere(
+    List<Map<String, dynamic>> items,
+    String field,
+    String value,
+  ) => items.where((r) => r[field]?.toString().toLowerCase() == value).length;
 
   static int _countToday(List<Map<String, dynamic>> items, String field) {
     final today = DateTime.now();
     return items.where((r) {
       final s = r[field]?.toString() ?? '';
       final d = DateTime.tryParse(s);
-      return d != null && d.year == today.year && d.month == today.month && d.day == today.day;
+      return d != null &&
+          d.year == today.year &&
+          d.month == today.month &&
+          d.day == today.day;
     }).length;
   }
 
@@ -521,7 +800,13 @@ class _StatsGrid extends StatelessWidget {
 }
 
 class _StatSpec {
-  const _StatSpec(this.icon, this.badge, this.badgeColor, this.value, this.label);
+  const _StatSpec(
+    this.icon,
+    this.badge,
+    this.badgeColor,
+    this.value,
+    this.label,
+  );
   final IconData icon;
   final String badge;
   final Color badgeColor;
@@ -542,7 +827,11 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: TopwebsuiteTheme.border),
         boxShadow: const [
-          BoxShadow(color: Color(0x06024EE0), blurRadius: 10, offset: Offset(0, 3)),
+          BoxShadow(
+            color: Color(0x06024EE0),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
@@ -552,12 +841,17 @@ class _StatCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 30, height: 30,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
                   color: TopwebsuiteTheme.primarySoft,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(spec.icon, size: 14, color: TopwebsuiteTheme.primary),
+                child: Icon(
+                  spec.icon,
+                  size: 14,
+                  color: TopwebsuiteTheme.primary,
+                ),
               ),
               const Spacer(),
               Container(
@@ -566,28 +860,37 @@ class _StatCard extends StatelessWidget {
                   color: spec.badgeColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(spec.badge,
+                child: Text(
+                  spec.badge,
                   style: TextStyle(
-                    fontSize: 9, fontWeight: FontWeight.w700,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
                     color: spec.badgeColor,
                   ),
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(spec.value,
+          Text(
+            spec.value,
             style: const TextStyle(
-              fontSize: 18, fontWeight: FontWeight.w800,
-              letterSpacing: -0.02, color: TopwebsuiteTheme.ink,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.02,
+              color: TopwebsuiteTheme.ink,
             ),
-            maxLines: 1, overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
-          Text(spec.label,
+          Text(
+            spec.label,
             style: const TextStyle(fontSize: 10, color: TopwebsuiteTheme.muted),
-            maxLines: 1, overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -625,19 +928,27 @@ class _ManagementCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: TopwebsuiteTheme.border),
         boxShadow: const [
-          BoxShadow(color: Color(0x06024EE0), blurRadius: 10, offset: Offset(0, 3)),
+          BoxShadow(
+            color: Color(0x06024EE0),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
+          Text(
+            title,
             style: const TextStyle(
-              fontSize: 16, fontWeight: FontWeight.w800, color: TopwebsuiteTheme.ink,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: TopwebsuiteTheme.ink,
             ),
           ),
           const SizedBox(height: 4),
-          Text(subtitle,
+          Text(
+            subtitle,
             style: const TextStyle(fontSize: 12, color: TopwebsuiteTheme.muted),
           ),
           const SizedBox(height: 14),
@@ -657,7 +968,8 @@ class _ManagementCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     textStyle: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -678,7 +990,8 @@ class _ManagementCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     textStyle: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -701,7 +1014,8 @@ class _ManagementCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   textStyle: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -749,9 +1063,11 @@ class _FilterBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Status dropdown
-          const Text('Status',
+          const Text(
+            'Status',
             style: TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w700,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
               color: TopwebsuiteTheme.muted,
             ),
           ),
@@ -760,16 +1076,20 @@ class _FilterBar extends StatelessWidget {
             value: selectedStatus,
             items: statusOptions,
             labelOf: (s) => s == 'all'
-                ? (statusOptions.first.startsWith('All') ? statusOptions.first : 'All Statuses')
+                ? (statusOptions.first.startsWith('All')
+                      ? statusOptions.first
+                      : 'All Statuses')
                 : _capitalize(s),
             onChanged: onStatusChanged,
           ),
           const SizedBox(height: 12),
 
           // Sort dropdown
-          const Text('Sort By',
+          const Text(
+            'Sort By',
             style: TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w700,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
               color: TopwebsuiteTheme.muted,
             ),
           ),
@@ -783,9 +1103,11 @@ class _FilterBar extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Quick search
-          const Text('Quick Search',
+          const Text(
+            'Quick Search',
             style: TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w700,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
               color: TopwebsuiteTheme.muted,
             ),
           ),
@@ -796,11 +1118,14 @@ class _FilterBar extends StatelessWidget {
             decoration: InputDecoration(
               hintText: searchPlaceholder,
               hintStyle: const TextStyle(
-                fontSize: 12, color: Color(0xFF94A3B8),
+                fontSize: 12,
+                color: Color(0xFF94A3B8),
               ),
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 11),
+                horizontal: 12,
+                vertical: 11,
+              ),
               filled: true,
               fillColor: TopwebsuiteTheme.surface,
               border: OutlineInputBorder(
@@ -814,7 +1139,9 @@ class _FilterBar extends StatelessWidget {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(
-                    color: TopwebsuiteTheme.primary, width: 1.4),
+                  color: TopwebsuiteTheme.primary,
+                  width: 1.4,
+                ),
               ),
             ),
           ),
@@ -852,16 +1179,21 @@ class _DropdownField extends StatelessWidget {
         isExpanded: true,
         underline: const SizedBox.shrink(),
         style: const TextStyle(
-          fontSize: 13, color: TopwebsuiteTheme.ink,
+          fontSize: 13,
+          color: TopwebsuiteTheme.ink,
           fontWeight: FontWeight.w500,
         ),
-        icon: const Icon(Icons.keyboard_arrow_down_rounded,
-            color: TopwebsuiteTheme.muted, size: 18),
-        items: items.map((s) => DropdownMenuItem(
-          value: s,
-          child: Text(labelOf(s)),
-        )).toList(),
-        onChanged: (v) { if (v != null) onChanged(v); },
+        icon: const Icon(
+          Icons.keyboard_arrow_down_rounded,
+          color: TopwebsuiteTheme.muted,
+          size: 18,
+        ),
+        items: items
+            .map((s) => DropdownMenuItem(value: s, child: Text(labelOf(s))))
+            .toList(),
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
       ),
     );
   }
@@ -891,9 +1223,9 @@ class _DocCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final id     = stringValue(row, config.idKeys);
+    final id = stringValue(row, config.idKeys);
     final number = row[numberKey]?.toString() ?? id;
-    final name   = row[nameKey]?.toString() ?? '';
+    final name = row[nameKey]?.toString() ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -901,7 +1233,11 @@ class _DocCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFEAF0F7)),
         boxShadow: const [
-          BoxShadow(color: Color(0x06024EE0), blurRadius: 10, offset: Offset(0, 3)),
+          BoxShadow(
+            color: Color(0x06024EE0),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
@@ -913,33 +1249,43 @@ class _DocCard extends ConsumerWidget {
             child: Row(
               children: [
                 Container(
-                  width: 38, height: 38,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     color: TopwebsuiteTheme.primarySoft,
                     borderRadius: BorderRadius.circular(11),
                   ),
-                  child: const Icon(Icons.description_outlined,
-                      size: 17, color: TopwebsuiteTheme.primary),
+                  child: const Icon(
+                    Icons.description_outlined,
+                    size: 17,
+                    color: TopwebsuiteTheme.primary,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(number,
+                      Text(
+                        number,
                         style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
                           color: TopwebsuiteTheme.ink,
                         ),
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (name.isNotEmpty)
-                        Text(name,
+                        Text(
+                          name,
                           style: const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                             color: TopwebsuiteTheme.primary,
                           ),
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                     ],
                   ),
@@ -955,41 +1301,78 @@ class _DocCard extends ConsumerWidget {
             padding: const EdgeInsets.all(10),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    _ActionBtn(
-                      label: 'Preview',
-                      icon: Icons.visibility_outlined,
-                      onTap: config.previewPath != null && id.isNotEmpty
-                          ? () async {
-                              final token = await ref
-                                  .read(secureTokenStoreProvider)
-                                  .readAccessToken();
-                              if (!context.mounted) return;
-                              await Navigator.of(context).push(
+                if (config.key == 'business-profile')
+                  Row(
+                    children: [
+                      _ActionBtn(
+                        label: 'View',
+                        icon: Icons.public_rounded,
+                        onTap: id.isEmpty
+                            ? null
+                            : () => _openLivePage(context, ref, row),
+                      ),
+                      const SizedBox(width: 8),
+                      _ActionBtn(
+                        label:
+                            (row['publish_status']?.toString() == 'published')
+                            ? 'Unpublish'
+                            : 'Publish',
+                        icon: (row['publish_status']?.toString() == 'published')
+                            ? Icons.visibility_off_outlined
+                            : Icons.public_rounded,
+                        onTap: id.isEmpty
+                            ? null
+                            : () => _togglePublish(
+                                context,
+                                ref,
+                                id,
+                                row['publish_status']?.toString() !=
+                                    'published',
+                              ),
+                      ),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
+                      _ActionBtn(
+                        label: 'Preview',
+                        icon: Icons.visibility_outlined,
+                        onTap: config.previewPath != null && id.isNotEmpty
+                            ? () => Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => BackendPreviewScreen(
+                                  builder: (_) => DocumentPreviewScreen(
                                     title: number,
-                                    path: config.previewPath!(id),
-                                    token: token,
+                                    previewPath: config.previewPath!(id),
+                                    downloadPath:
+                                        config.downloadPath?.call(id) ?? '',
+                                    docId: id,
+                                    docType: config.key.endsWith('s')
+                                        ? config.key.substring(
+                                            0,
+                                            config.key.length - 1,
+                                          )
+                                        : config.key,
                                   ),
                                 ),
-                              );
-                            }
-                          : null,
-                    ),
-                    const SizedBox(width: 8),
-                    _ActionBtn(
-                      label: 'Download PDF',
-                      icon: Icons.picture_as_pdf_outlined,
-                      onTap: config.downloadPath != null && id.isNotEmpty
-                          ? () => ref
-                              .read(fileServiceProvider)
-                              .openPdf(config.downloadPath!(id), '$number.pdf')
-                          : null,
-                    ),
-                  ],
-                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      _ActionBtn(
+                        label: 'Download PDF',
+                        icon: Icons.picture_as_pdf_outlined,
+                        onTap: config.downloadPath != null && id.isNotEmpty
+                            ? () => ref
+                                  .read(fileServiceProvider)
+                                  .openPdf(
+                                    config.downloadPath!(id),
+                                    '$number.pdf',
+                                  )
+                            : null,
+                      ),
+                    ],
+                  ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -1003,10 +1386,26 @@ class _DocCard extends ConsumerWidget {
                       label: 'Delete',
                       icon: Icons.delete_outline_rounded,
                       danger: true,
-                      onTap: id.isEmpty ? null : () => _confirmDelete(context, ref, id),
+                      onTap: id.isEmpty
+                          ? null
+                          : () => _confirmDelete(context, ref, id),
                     ),
                   ],
                 ),
+                if (config.key == 'letters') ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _ActionBtn(
+                        label: 'Duplicate',
+                        icon: Icons.copy_rounded,
+                        onTap: id.isEmpty
+                            ? null
+                            : () => _duplicateLetter(context, ref, id),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -1015,8 +1414,111 @@ class _DocCard extends ConsumerWidget {
     );
   }
 
+  Future<void> _duplicateLetter(
+    BuildContext context,
+    WidgetRef ref,
+    String id,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(apiClientProvider)
+          .postMap('/api/letters/$id/duplicate/', {});
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Letter duplicated.')),
+      );
+      onRefresh();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  /// Opens the published business profile's public "live page" in a WebView.
+  Future<void> _openLivePage(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> row,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final slug = row['slug']?.toString() ?? '';
+    if (slug.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No live page available yet.')),
+      );
+      return;
+    }
+    if (row['publish_status']?.toString() != 'published') {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Publish the profile to view its live page.'),
+        ),
+      );
+      return;
+    }
+    try {
+      final pub = unwrapData(
+        await ref
+            .read(apiClientProvider)
+            .getMap('/api/v1/business-profile/public/$slug/'),
+      );
+      final url = _resolveLiveUrl(pub['public_url']?.toString() ?? '');
+      if (url.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Live page URL unavailable.')),
+        );
+        return;
+      }
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => LiveWebPageScreen(
+            url: url,
+            title: row['business_name']?.toString() ?? 'Live Page',
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  String _resolveLiveUrl(String raw) {
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('http')) return raw;
+    final path = raw.startsWith('/') ? raw : '/$raw';
+    return 'https://topwebsuite.online$path';
+  }
+
+  Future<void> _togglePublish(
+    BuildContext context,
+    WidgetRef ref,
+    String id,
+    bool publish,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final action = publish ? 'publish' : 'unpublish';
+    try {
+      await ref
+          .read(apiClientProvider)
+          .postMap('/api/v1/business-profile/$id/$action/', {});
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            publish ? 'Profile published.' : 'Profile unpublished.',
+          ),
+        ),
+      );
+      onRefresh();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
   Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, String id) async {
+    BuildContext context,
+    WidgetRef ref,
+    String id,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -1030,7 +1532,8 @@ class _DocCard extends ConsumerWidget {
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(
-                foregroundColor: TopwebsuiteTheme.danger),
+              foregroundColor: TopwebsuiteTheme.danger,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -1109,7 +1612,7 @@ class _FilterSheetState extends State<_FilterSheet> {
   void initState() {
     super.initState();
     _status = widget.selectedStatus;
-    _sort   = widget.sortOrder;
+    _sort = widget.sortOrder;
   }
 
   @override
@@ -1120,14 +1623,19 @@ class _FilterSheetState extends State<_FilterSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
-          16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
+        16,
+        16,
+        16,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
             child: Container(
-              width: 36, height: 4,
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
                 color: TopwebsuiteTheme.border,
                 borderRadius: BorderRadius.circular(2),
@@ -1135,37 +1643,52 @@ class _FilterSheetState extends State<_FilterSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Filter & Sort',
+          const Text(
+            'Filter & Sort',
             style: TextStyle(
-              fontSize: 16, fontWeight: FontWeight.w800,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
               color: TopwebsuiteTheme.ink,
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Status', style: TextStyle(
-            fontSize: 11, fontWeight: FontWeight.w700,
-            color: TopwebsuiteTheme.muted,
-          )),
+          const Text(
+            'Status',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: TopwebsuiteTheme.muted,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
-            spacing: 8, runSpacing: 8,
+            spacing: 8,
+            runSpacing: 8,
             children: widget.statusOptions.map((s) {
               final sel = s == _status;
               return GestureDetector(
                 onTap: () => setState(() => _status = s),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 8),
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: sel ? TopwebsuiteTheme.primary : TopwebsuiteTheme.surface,
+                    color: sel
+                        ? TopwebsuiteTheme.primary
+                        : TopwebsuiteTheme.surface,
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                      color: sel ? TopwebsuiteTheme.primary : TopwebsuiteTheme.border,
+                      color: sel
+                          ? TopwebsuiteTheme.primary
+                          : TopwebsuiteTheme.border,
                     ),
                   ),
-                  child: Text(s == 'all' ? 'All Statuses' : _capitalize(s),
+                  child: Text(
+                    s == 'all' ? 'All Statuses' : _capitalize(s),
                     style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                       color: sel ? Colors.white : TopwebsuiteTheme.ink,
                     ),
                   ),
@@ -1174,16 +1697,30 @@ class _FilterSheetState extends State<_FilterSheet> {
             }).toList(),
           ),
           const SizedBox(height: 16),
-          const Text('Sort By', style: TextStyle(
-            fontSize: 11, fontWeight: FontWeight.w700,
-            color: TopwebsuiteTheme.muted,
-          )),
+          const Text(
+            'Sort By',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: TopwebsuiteTheme.muted,
+            ),
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
-              _SortChip(label: 'Newest First', value: 'newest', selected: _sort, onTap: (v) => setState(() => _sort = v)),
+              _SortChip(
+                label: 'Newest First',
+                value: 'newest',
+                selected: _sort,
+                onTap: (v) => setState(() => _sort = v),
+              ),
               const SizedBox(width: 8),
-              _SortChip(label: 'Oldest First', value: 'oldest', selected: _sort, onTap: (v) => setState(() => _sort = v)),
+              _SortChip(
+                label: 'Oldest First',
+                value: 'oldest',
+                selected: _sort,
+                onTap: (v) => setState(() => _sort = v),
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -1203,8 +1740,10 @@ class _FilterSheetState extends State<_FilterSheet> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text('Apply Filters',
-                style: TextStyle(fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Apply Filters',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ],
@@ -1215,8 +1754,10 @@ class _FilterSheetState extends State<_FilterSheet> {
 
 class _SortChip extends StatelessWidget {
   const _SortChip({
-    required this.label, required this.value,
-    required this.selected, required this.onTap,
+    required this.label,
+    required this.value,
+    required this.selected,
+    required this.onTap,
   });
   final String label, value, selected;
   final ValueChanged<String> onTap;
@@ -1235,9 +1776,11 @@ class _SortChip extends StatelessWidget {
             color: sel ? TopwebsuiteTheme.primary : TopwebsuiteTheme.border,
           ),
         ),
-        child: Text(label,
+        child: Text(
+          label,
           style: TextStyle(
-            fontSize: 13, fontWeight: FontWeight.w700,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
             color: sel ? Colors.white : TopwebsuiteTheme.ink,
           ),
         ),
@@ -1256,31 +1799,106 @@ class _TipData {
 }
 
 const _kTips = <String, (String, List<_TipData>)>{
-  'invoices': ('Quick Insights', [
-    _TipData('Best Month', 'Check your dashboard to find the month with the highest invoice volume.', Icons.trending_up_rounded),
-    _TipData('Top Client', 'Your most invoiced client leads by total value — tap View all → to see details.', Icons.person_outlined),
-    _TipData('Action Needed', 'Follow up on pending invoices to ensure timely payment from clients.', Icons.bolt_rounded),
-  ]),
-  'receipts': ('Receipt Notes', [
-    _TipData('Best use', 'Capture completed payments and give clients a clean proof of payment.', Icons.check_circle_outline),
-    _TipData('Branding', 'Use your logo, brand color and signature to keep receipts consistent.', Icons.palette_outlined),
-    _TipData('Delivery', 'After saving, open preview and download PDF to share with the payer.', Icons.send_outlined),
-  ]),
-  'waybills': ('Waybill Tips', [
-    _TipData('Accurate contacts', 'Add sender and recipient contact details so dispatch teams can follow up quickly.', Icons.contacts_outlined),
-    _TipData('Weight matters', 'Use a realistic shipment weight to keep delivery records clear and auditable.', Icons.scale_outlined),
-    _TipData('Status updates', 'Update the waybill status (Shipped → Delivered) to track your shipments.', Icons.local_shipping_outlined),
-  ]),
-  'quotations': ('Quotation Note', [
-    _TipData('Backend synced', 'Quotations use the live API endpoints and backend numbering automatically.', Icons.cloud_done_outlined),
-    _TipData('Preview flow', 'Save a quotation, open preview, continue editing, and download the generated PDF.', Icons.visibility_outlined),
-    _TipData('Invoice-style builder', 'The layout, live preview, item totals and document flow follow the invoice experience.', Icons.receipt_long_outlined),
-  ]),
-  'letters': ('Letter Tips', [
-    _TipData('Letterhead first', 'Upload a letterhead layout before writing a letter to get a branded output.', Icons.layers_outlined),
-    _TipData('Status control', 'Keep letters as Draft while editing; mark Final only when ready to send.', Icons.edit_note_rounded),
-    _TipData('PDF export', 'After writing a letter, use Download PDF to get a print-ready version.', Icons.picture_as_pdf_outlined),
-  ]),
+  'invoices': (
+    'Quick Insights',
+    [
+      _TipData(
+        'Best Month',
+        'Check your dashboard to find the month with the highest invoice volume.',
+        Icons.trending_up_rounded,
+      ),
+      _TipData(
+        'Top Client',
+        'Your most invoiced client leads by total value — tap View all → to see details.',
+        Icons.person_outlined,
+      ),
+      _TipData(
+        'Action Needed',
+        'Follow up on pending invoices to ensure timely payment from clients.',
+        Icons.bolt_rounded,
+      ),
+    ],
+  ),
+  'receipts': (
+    'Receipt Notes',
+    [
+      _TipData(
+        'Best use',
+        'Capture completed payments and give clients a clean proof of payment.',
+        Icons.check_circle_outline,
+      ),
+      _TipData(
+        'Branding',
+        'Use your logo, brand color and signature to keep receipts consistent.',
+        Icons.palette_outlined,
+      ),
+      _TipData(
+        'Delivery',
+        'After saving, open preview and download PDF to share with the payer.',
+        Icons.send_outlined,
+      ),
+    ],
+  ),
+  'waybills': (
+    'Waybill Tips',
+    [
+      _TipData(
+        'Accurate contacts',
+        'Add sender and recipient contact details so dispatch teams can follow up quickly.',
+        Icons.contacts_outlined,
+      ),
+      _TipData(
+        'Weight matters',
+        'Use a realistic shipment weight to keep delivery records clear and auditable.',
+        Icons.scale_outlined,
+      ),
+      _TipData(
+        'Status updates',
+        'Update the waybill status (Shipped → Delivered) to track your shipments.',
+        Icons.local_shipping_outlined,
+      ),
+    ],
+  ),
+  'quotations': (
+    'Quotation Note',
+    [
+      _TipData(
+        'Backend synced',
+        'Quotations use the live API endpoints and backend numbering automatically.',
+        Icons.cloud_done_outlined,
+      ),
+      _TipData(
+        'Preview flow',
+        'Save a quotation, open preview, continue editing, and download the generated PDF.',
+        Icons.visibility_outlined,
+      ),
+      _TipData(
+        'Invoice-style builder',
+        'The layout, live preview, item totals and document flow follow the invoice experience.',
+        Icons.receipt_long_outlined,
+      ),
+    ],
+  ),
+  'letters': (
+    'Letter Tips',
+    [
+      _TipData(
+        'Letterhead first',
+        'Upload a letterhead layout before writing a letter to get a branded output.',
+        Icons.layers_outlined,
+      ),
+      _TipData(
+        'Status control',
+        'Keep letters as Draft while editing; mark Final only when ready to send.',
+        Icons.edit_note_rounded,
+      ),
+      _TipData(
+        'PDF export',
+        'After writing a letter, use Download PDF to get a print-ready version.',
+        Icons.picture_as_pdf_outlined,
+      ),
+    ],
+  ),
 };
 
 class _TipsCard extends StatelessWidget {
@@ -1300,19 +1918,27 @@ class _TipsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: TopwebsuiteTheme.border),
         boxShadow: const [
-          BoxShadow(color: Color(0x06024EE0), blurRadius: 10, offset: Offset(0, 3)),
+          BoxShadow(
+            color: Color(0x06024EE0),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(sectionTitle,
+          Text(
+            sectionTitle,
             style: const TextStyle(
-              fontSize: 15, fontWeight: FontWeight.w800, color: TopwebsuiteTheme.ink,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: TopwebsuiteTheme.ink,
             ),
           ),
           const SizedBox(height: 4),
-          Text('Helpful reminders for this workspace.',
+          Text(
+            'Helpful reminders for this workspace.',
             style: const TextStyle(fontSize: 12, color: TopwebsuiteTheme.muted),
           ),
           const SizedBox(height: 14),
@@ -1337,7 +1963,8 @@ class _TipItem extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 34, height: 34,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
             color: TopwebsuiteTheme.primarySoft,
             borderRadius: BorderRadius.circular(10),
@@ -1349,15 +1976,21 @@ class _TipItem extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(tip.title,
+              Text(
+                tip.title,
                 style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                   color: TopwebsuiteTheme.ink,
                 ),
               ),
               const SizedBox(height: 2),
-              Text(tip.body,
-                style: const TextStyle(fontSize: 12, color: TopwebsuiteTheme.muted),
+              Text(
+                tip.body,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: TopwebsuiteTheme.muted,
+                ),
               ),
             ],
           ),
@@ -1370,10 +2003,7 @@ class _TipItem extends StatelessWidget {
 // ── Top bar ───────────────────────────────────────────────────────────────────
 
 class _WorkspaceTopBar extends ConsumerWidget {
-  const _WorkspaceTopBar({
-    required this.placeholder,
-    required this.onSearch,
-  });
+  const _WorkspaceTopBar({required this.placeholder, required this.onSearch});
 
   final String placeholder;
   final ValueChanged<String> onSearch;
@@ -1385,7 +2015,11 @@ class _WorkspaceTopBar extends ConsumerWidget {
     return Container(
       color: TopwebsuiteTheme.primary,
       padding: EdgeInsets.fromLTRB(
-          10, MediaQuery.of(context).padding.top + 8, 10, 8),
+        10,
+        MediaQuery.of(context).padding.top + 8,
+        10,
+        8,
+      ),
       child: Row(
         children: [
           // Hamburger
@@ -1407,14 +2041,20 @@ class _WorkspaceTopBar extends ConsumerWidget {
               child: TextField(
                 onChanged: onSearch,
                 style: TextStyle(
-                    fontSize: 13, color: Colors.white.withValues(alpha: 0.95)),
+                  fontSize: 13,
+                  color: Colors.white.withValues(alpha: 0.95),
+                ),
                 decoration: InputDecoration(
                   hintText: placeholder,
                   hintStyle: TextStyle(
-                    fontSize: 13, color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 13,
+                    color: Colors.white.withValues(alpha: 0.6),
                   ),
-                  prefixIcon: Icon(Icons.search_rounded,
-                      size: 18, color: Colors.white.withValues(alpha: 0.7)),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: 18,
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -1430,7 +2070,8 @@ class _WorkspaceTopBar extends ConsumerWidget {
           _TBIconBtn(
             icon: Icons.add_rounded,
             onTap: () {
-              final state = context.findAncestorStateOfType<_DocWorkspaceScreenState>();
+              final state = context
+                  .findAncestorStateOfType<_DocWorkspaceScreenState>();
               state?._openForm(context, null);
             },
           ),
@@ -1466,7 +2107,8 @@ class _TBIconBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 40, height: 40,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(12),
@@ -1484,21 +2126,27 @@ class _UserAvatarBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initials = name.trim().isEmpty ? 'U'
+    final initials = name.trim().isEmpty
+        ? 'U'
         : name.trim().split(' ').map((w) => w[0]).take(2).join().toUpperCase();
     return Container(
-      width: 40, height: 40,
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [TopwebsuiteTheme.primary, Color(0xFF5B9FE8)],
         ),
         borderRadius: BorderRadius.circular(13),
       ),
       alignment: Alignment.center,
-      child: Text(initials,
+      child: Text(
+        initials,
         style: const TextStyle(
-          color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14,
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 14,
         ),
       ),
     );
@@ -1520,75 +2168,112 @@ class _DocUserMenuSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
-          16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Center(child: Container(
-            width: 36, height: 4,
-            decoration: BoxDecoration(
+        16,
+        16,
+        16,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
                 color: TopwebsuiteTheme.border,
-                borderRadius: BorderRadius.circular(2)))),
-        const SizedBox(height: 14),
-        // User header
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          // User header
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
               color: TopwebsuiteTheme.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: TopwebsuiteTheme.border)),
-          child: Row(children: [
-            _UserAvatarBtn(name: user?.displayName ?? ''),
-            const SizedBox(width: 12),
-            Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(user?.displayName ?? '',
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w800,
-                          color: TopwebsuiteTheme.ink)),
-                  Text(user?.email ?? '',
-                      style: const TextStyle(
-                          fontSize: 12, color: TopwebsuiteTheme.muted)),
-                ])),
-          ]),
-        ),
-        const SizedBox(height: 12),
-        _MenuItem(
-          icon: Icons.person_outline_rounded,
-          label: 'User Profile',
-          subtitle: 'Update your business details',
-          onTap: () { Navigator.pop(context); context.push('/account'); },
-        ),
-        _MenuItem(
-          icon: Icons.settings_outlined,
-          label: 'Settings',
-          subtitle: 'Account and preferences',
-          onTap: () { Navigator.pop(context); context.push('/account'); },
-        ),
-        _MenuItem(
-          icon: Icons.workspace_premium_outlined,
-          label: 'Billing',
-          subtitle: 'Manage your subscription plan',
-          onTap: () { Navigator.pop(context); context.push('/billing'); },
-        ),
-        _MenuItem(
-          icon: Icons.logout_rounded,
-          label: 'Logout',
-          subtitle: 'End this session',
-          destructive: true,
-          onTap: () {
-            Navigator.pop(context);
-            ref.read(authControllerProvider.notifier).logout();
-          },
-        ),
-      ]),
+              border: Border.all(color: TopwebsuiteTheme.border),
+            ),
+            child: Row(
+              children: [
+                _UserAvatarBtn(name: user?.displayName ?? ''),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user?.displayName ?? '',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: TopwebsuiteTheme.ink,
+                        ),
+                      ),
+                      Text(
+                        user?.email ?? '',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: TopwebsuiteTheme.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _MenuItem(
+            icon: Icons.person_outline_rounded,
+            label: 'User Profile',
+            subtitle: 'Update your business details',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/account');
+            },
+          ),
+          _MenuItem(
+            icon: Icons.settings_outlined,
+            label: 'Settings',
+            subtitle: 'Account and preferences',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/account');
+            },
+          ),
+          _MenuItem(
+            icon: Icons.workspace_premium_outlined,
+            label: 'Billing',
+            subtitle: 'Manage your subscription plan',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/billing');
+            },
+          ),
+          _MenuItem(
+            icon: Icons.logout_rounded,
+            label: 'Logout',
+            subtitle: 'End this session',
+            destructive: true,
+            onTap: () {
+              Navigator.pop(context);
+              ref.read(authControllerProvider.notifier).logout();
+            },
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _MenuItem extends StatelessWidget {
   const _MenuItem({
-    required this.icon, required this.label,
-    required this.subtitle, required this.onTap,
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
     this.destructive = false,
   });
   final IconData icon;
@@ -1603,17 +2288,34 @@ class _MenuItem extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       leading: Container(
-        width: 40, height: 40,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
-            color: destructive
-                ? const Color(0xFFFEF2F2) : TopwebsuiteTheme.primarySoft,
-            borderRadius: BorderRadius.circular(12)),
-        child: Icon(icon, size: 18,
-            color: destructive ? TopwebsuiteTheme.danger : TopwebsuiteTheme.primary)),
-      title: Text(label,
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color)),
-      subtitle: Text(subtitle,
-          style: const TextStyle(fontSize: 11, color: TopwebsuiteTheme.muted)),
+          color: destructive
+              ? const Color(0xFFFEF2F2)
+              : TopwebsuiteTheme.primarySoft,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: destructive
+              ? TopwebsuiteTheme.danger
+              : TopwebsuiteTheme.primary,
+        ),
+      ),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(fontSize: 11, color: TopwebsuiteTheme.muted),
+      ),
       onTap: onTap,
     );
   }
@@ -1627,16 +2329,20 @@ class _WorkspaceDrawer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     const items = [
-      _DItem('Dashboard',        Icons.speed_rounded,             '/'),
-      _DItem('Invoices',         Icons.receipt_long_outlined,     '/invoices'),
-      _DItem('Receipts',         Icons.receipt_outlined,          '/receipts'),
-      _DItem('Waybills',         Icons.local_shipping_outlined,   '/waybills'),
-      _DItem('Quotations',       Icons.request_quote_outlined,    '/quotations'),
-      _DItem('Letterheads',      Icons.mail_outline_rounded,      '/letterheads'),
-      _DItem('Business Profile', Icons.storefront_outlined,       '/business-profile'),
-      _DItem('CRM',              Icons.groups_2_outlined,         '/crm'),
-      _DItem('ERP',              Icons.inventory_2_outlined,      '/erp'),
-      _DItem('Billing',          Icons.workspace_premium_outlined,'/billing'),
+      _DItem('Dashboard', Icons.speed_rounded, '/'),
+      _DItem('Invoices', Icons.receipt_long_outlined, '/invoices'),
+      _DItem('Receipts', Icons.receipt_outlined, '/receipts'),
+      _DItem('Waybills', Icons.local_shipping_outlined, '/waybills'),
+      _DItem('Quotations', Icons.request_quote_outlined, '/quotations'),
+      _DItem('Letterheads', Icons.mail_outline_rounded, '/letterheads'),
+      _DItem(
+        'Business Profile',
+        Icons.storefront_outlined,
+        '/business-profile',
+      ),
+      _DItem('CRM', Icons.groups_2_outlined, '/crm'),
+      _DItem('ERP', Icons.inventory_2_outlined, '/erp'),
+      _DItem('Billing', Icons.workspace_premium_outlined, '/billing'),
     ];
 
     final loc = GoRouterState.of(context).matchedLocation;
@@ -1658,23 +2364,29 @@ class _WorkspaceDrawer extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Topwebsuite',
+                        Text(
+                          'Topwebsuite',
                           style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                             color: TopwebsuiteTheme.ink,
                           ),
                         ),
-                        Text('Workspace',
+                        Text(
+                          'Workspace',
                           style: TextStyle(
-                            fontSize: 12, color: TopwebsuiteTheme.muted,
+                            fontSize: 12,
+                            color: TopwebsuiteTheme.muted,
                           ),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded,
-                        color: TopwebsuiteTheme.muted),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: TopwebsuiteTheme.muted,
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -1685,10 +2397,13 @@ class _WorkspaceDrawer extends ConsumerWidget {
               padding: EdgeInsets.fromLTRB(20, 14, 20, 8),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('MAIN MENU',
+                child: Text(
+                  'MAIN MENU',
                   style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.w700,
-                    letterSpacing: 0.12, color: Color(0xFF94A3B8),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.12,
+                    color: Color(0xFF94A3B8),
                   ),
                 ),
               ),
@@ -1697,30 +2412,41 @@ class _WorkspaceDrawer extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 children: items.map((item) {
-                  final isActive = loc == item.route ||
+                  final isActive =
+                      loc == item.route ||
                       (item.route != '/' && loc.startsWith(item.route));
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: ListTile(
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       tileColor: isActive ? TopwebsuiteTheme.primarySoft : null,
                       leading: Container(
-                        width: 38, height: 38,
+                        width: 38,
+                        height: 38,
                         decoration: BoxDecoration(
                           color: isActive
                               ? TopwebsuiteTheme.primary
                               : const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(item.icon, size: 17,
-                          color: isActive ? Colors.white : TopwebsuiteTheme.primary),
-                      ),
-                      title: Text(item.label,
-                        style: TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600,
+                        child: Icon(
+                          item.icon,
+                          size: 17,
                           color: isActive
-                              ? TopwebsuiteTheme.primary : TopwebsuiteTheme.ink,
+                              ? Colors.white
+                              : TopwebsuiteTheme.primary,
+                        ),
+                      ),
+                      title: Text(
+                        item.label,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isActive
+                              ? TopwebsuiteTheme.primary
+                              : TopwebsuiteTheme.ink,
                         ),
                       ),
                       onTap: () {
@@ -1737,24 +2463,33 @@ class _WorkspaceDrawer extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: ListTile(
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 leading: Container(
-                  width: 38, height: 38,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.logout_rounded,
-                      size: 17, color: TopwebsuiteTheme.danger),
-                ),
-                title: const Text('Logout',
-                  style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600,
+                  child: const Icon(
+                    Icons.logout_rounded,
+                    size: 17,
                     color: TopwebsuiteTheme.danger,
                   ),
                 ),
-                subtitle: const Text('End this session',
-                  style: TextStyle(fontSize: 11, color: TopwebsuiteTheme.muted)),
+                title: const Text(
+                  'Logout',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: TopwebsuiteTheme.danger,
+                  ),
+                ),
+                subtitle: const Text(
+                  'End this session',
+                  style: TextStyle(fontSize: 11, color: TopwebsuiteTheme.muted),
+                ),
                 onTap: () {
                   Navigator.of(context).pop();
                   ref.read(authControllerProvider.notifier).logout();
@@ -1784,11 +2519,7 @@ class _ExtraCreateBtn {
 }
 
 class _CreateBar extends StatelessWidget {
-  const _CreateBar({
-    required this.label,
-    required this.onTap,
-    this.extra,
-  });
+  const _CreateBar({required this.label, required this.onTap, this.extra});
 
   final String label;
   final VoidCallback onTap;
@@ -1818,7 +2549,8 @@ class _CreateBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 textStyle: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1847,14 +2579,35 @@ class _DocFormState extends ConsumerState<_DocForm> {
   bool _saving = false;
   String get _draftKey => 'draft_${widget.config.key}';
 
+  // Letterhead file upload
+  String? _letterheadFilePath;
+  String? _letterheadFileName;
+
+  // Company logo upload (waybills / quotations)
+  String? _logoPath;
+  String? _logoName;
+
+  // Business profile reference selections
+  int? _categoryId;
+  int? _countryId;
+
+  bool get _isBusinessProfile => widget.config.key == 'business-profile';
+  bool get _isLetterhead => widget.config.key == 'letterhead';
+
   @override
   void initState() {
     super.initState();
+    _categoryId = _refId(widget.row?['category']);
+    _countryId = _refId(widget.row?['country']);
     _controllers = {
       for (final f in widget.config.fields)
-        f.key: TextEditingController(text: widget.row?[f.key]?.toString() ?? ''),
+        f.key: TextEditingController(
+          text: widget.row?[f.key]?.toString() ?? '',
+        ),
     };
-    for (final c in _controllers.values) { c.addListener(_saveDraft); }
+    for (final c in _controllers.values) {
+      c.addListener(_saveDraft);
+    }
     _lineItems = [];
     if (widget.config.hasLineItems) {
       final existing = widget.row?['items'];
@@ -1871,8 +2624,12 @@ class _DocFormState extends ConsumerState<_DocForm> {
 
   @override
   void dispose() {
-    for (final c in _controllers.values) { c.dispose(); }
-    for (final li in _lineItems) { li.dispose(); }
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    for (final li in _lineItems) {
+      li.dispose();
+    }
     super.dispose();
   }
 
@@ -1889,16 +2646,25 @@ class _DocFormState extends ConsumerState<_DocForm> {
   }
 
   double get _total {
-    final sub  = _subtotal;
-    final disc = double.tryParse(
-      _controllers['discount_percent']?.text ?? _controllers['discount']?.text ?? '0') ?? 0;
-    final tax  = double.tryParse(
-      _controllers['vat_percent']?.text ?? _controllers['tax_percent']?.text ?? '0') ?? 0;
+    final sub = _subtotal;
+    final disc =
+        double.tryParse(
+          _controllers['discount_percent']?.text ??
+              _controllers['discount']?.text ??
+              '0',
+        ) ??
+        0;
+    final tax =
+        double.tryParse(
+          _controllers['vat_percent']?.text ??
+              _controllers['tax_percent']?.text ??
+              '0',
+        ) ??
+        0;
     return sub * (1 - disc / 100) * (1 + tax / 100);
   }
 
-  String _fmtAmt(double v) =>
-      v == 0 ? '0.00' : v.toStringAsFixed(2);
+  String _fmtAmt(double v) => v == 0 ? '0.00' : v.toStringAsFixed(2);
 
   // ── Date picker helper ────────────────────────────────────────────────────
 
@@ -1913,7 +2679,8 @@ class _DocFormState extends ConsumerState<_DocForm> {
       lastDate: DateTime(2100),
     );
     if (picked != null) {
-      c.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+      c.text =
+          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
       _saveDraft();
     }
   }
@@ -1921,11 +2688,14 @@ class _DocFormState extends ConsumerState<_DocForm> {
   // ── Section layout helpers ────────────────────────────────────────────────
 
   static const _sectionHeaderStyle = TextStyle(
-    fontSize: 11, fontWeight: FontWeight.w800,
-    letterSpacing: 0.08, color: Color(0xFF334155),
+    fontSize: 11,
+    fontWeight: FontWeight.w800,
+    letterSpacing: 0.08,
+    color: Color(0xFF334155),
   );
   static const _badgeStyle = TextStyle(
-    fontSize: 11, color: TopwebsuiteTheme.muted,
+    fontSize: 11,
+    color: TopwebsuiteTheme.muted,
   );
 
   Widget _section(String title, String badge, List<Widget> children) {
@@ -1959,12 +2729,19 @@ class _DocFormState extends ConsumerState<_DocForm> {
     );
   }
 
-  Widget _field(String key, {String? labelOverride, bool multiline = false,
-      TextInputType? keyboard, bool required = false}) {
+  Widget _field(
+    String key, {
+    String? labelOverride,
+    bool multiline = false,
+    TextInputType? keyboard,
+    bool required = false,
+  }) {
     final c = _controllers[key];
     if (c == null) return const SizedBox.shrink();
-    final label = labelOverride ??
-        widget.config.fields.where((f) => f.key == key).firstOrNull?.label ?? key;
+    final label =
+        labelOverride ??
+        widget.config.fields.where((f) => f.key == key).firstOrNull?.label ??
+        key;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextFormField(
@@ -1974,17 +2751,52 @@ class _DocFormState extends ConsumerState<_DocForm> {
         keyboardType: keyboard,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(fontSize: 13, color: TopwebsuiteTheme.muted),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: TopwebsuiteTheme.border)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: TopwebsuiteTheme.border)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: TopwebsuiteTheme.primary, width: 1.4)),
-          filled: true, fillColor: Colors.white,
+          labelStyle: const TextStyle(
+            fontSize: 13,
+            color: TopwebsuiteTheme.muted,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: TopwebsuiteTheme.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: TopwebsuiteTheme.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(
+              color: TopwebsuiteTheme.primary,
+              width: 1.4,
+            ),
+          ),
+          filled: true,
+          fillColor: Colors.white,
         ),
-        validator: required ? (v) => v == null || v.trim().isEmpty ? 'Required' : null : null,
+        validator: required
+            ? (v) => v == null || v.trim().isEmpty ? 'Required' : null
+            : null,
+      ),
+    );
+  }
+
+  Widget _choiceFieldFor(String key, {String? labelOverride}) {
+    final c = _controllers[key];
+    final field = widget.config.fields.where((f) => f.key == key).firstOrNull;
+    if (c == null || field?.choices == null) {
+      return _field(key, labelOverride: labelOverride);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: ChoiceDropdown(
+        controller: c,
+        label: labelOverride ?? field!.label,
+        choices: field!.choices!,
+        required: field.required,
       ),
     );
   }
@@ -1992,8 +2804,10 @@ class _DocFormState extends ConsumerState<_DocForm> {
   Widget _dateField(String key, {String? label}) {
     final c = _controllers[key];
     if (c == null) return const SizedBox.shrink();
-    final lbl = label ??
-        widget.config.fields.where((f) => f.key == key).firstOrNull?.label ?? key;
+    final lbl =
+        label ??
+        widget.config.fields.where((f) => f.key == key).firstOrNull?.label ??
+        key;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: GestureDetector(
@@ -2004,15 +2818,29 @@ class _DocFormState extends ConsumerState<_DocForm> {
             style: const TextStyle(color: TopwebsuiteTheme.ink, fontSize: 14),
             decoration: InputDecoration(
               labelText: lbl,
-              labelStyle: const TextStyle(fontSize: 13, color: TopwebsuiteTheme.muted),
-              suffixIcon: const Icon(Icons.calendar_today_rounded,
-                  size: 16, color: TopwebsuiteTheme.muted),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: TopwebsuiteTheme.border)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: TopwebsuiteTheme.border)),
-              filled: true, fillColor: Colors.white,
+              labelStyle: const TextStyle(
+                fontSize: 13,
+                color: TopwebsuiteTheme.muted,
+              ),
+              suffixIcon: const Icon(
+                Icons.calendar_today_rounded,
+                size: 16,
+                color: TopwebsuiteTheme.muted,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: TopwebsuiteTheme.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: TopwebsuiteTheme.border),
+              ),
+              filled: true,
+              fillColor: Colors.white,
             ),
           ),
         ),
@@ -2040,18 +2868,31 @@ class _DocFormState extends ConsumerState<_DocForm> {
     );
   }
 
-  Widget _totalRow(String label, String value, {bool muted = false, bool bold = false}) {
+  Widget _totalRow(
+    String label,
+    String value, {
+    bool muted = false,
+    bool bold = false,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(
-          fontSize: 13, fontWeight: bold ? FontWeight.w800 : FontWeight.normal,
-          color: muted ? TopwebsuiteTheme.muted : TopwebsuiteTheme.ink,
-        )),
-        Text(value, style: TextStyle(
-          fontSize: 13, fontWeight: bold ? FontWeight.w800 : FontWeight.normal,
-          color: bold ? TopwebsuiteTheme.ink : TopwebsuiteTheme.muted,
-        )),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: bold ? FontWeight.w800 : FontWeight.normal,
+            color: muted ? TopwebsuiteTheme.muted : TopwebsuiteTheme.ink,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: bold ? FontWeight.w800 : FontWeight.normal,
+            color: bold ? TopwebsuiteTheme.ink : TopwebsuiteTheme.muted,
+          ),
+        ),
       ],
     );
   }
@@ -2061,14 +2902,128 @@ class _DocFormState extends ConsumerState<_DocForm> {
   List<Widget> _buildSections() {
     final k = widget.config.key;
     switch (k) {
-      case 'invoices':    return _invoiceSections();
-      case 'receipts':    return _receiptSections();
-      case 'waybills':    return _waybillSections();
-      case 'quotations':  return _quotationSections();
-      case 'letters':     return _letterSections();
-      case 'letterhead':  return _letterheadSections();
-      default:            return _genericSections();
+      case 'invoices':
+        return _invoiceSections();
+      case 'receipts':
+        return _receiptSections();
+      case 'waybills':
+        return _waybillSections();
+      case 'quotations':
+        return _quotationSections();
+      case 'letters':
+        return _letterSections();
+      case 'letterhead':
+        return _letterheadSections();
+      case 'business-profile':
+        return _businessProfileSections();
+      default:
+        return _genericSections();
     }
+  }
+
+  // ── Business profile (with category + country selects) ───────────────────────
+
+  int? _refId(Object? raw) {
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    if (raw is Map) return _refId(raw['id']);
+    return int.tryParse(raw?.toString() ?? '');
+  }
+
+  List<Widget> _businessProfileSections() => [
+    _section('BUSINESS', 'Identity', [
+      _field('business_name', required: true),
+      _field('tagline'),
+      _field('description', multiline: true),
+      _refDropdown(
+        label: 'Category',
+        value: _categoryId,
+        options: ref.watch(businessCategoriesProvider),
+        onChanged: (v) => setState(() => _categoryId = v),
+      ),
+      _field('subcategory'),
+    ]),
+    _section('CONTACT', 'How clients reach you', [
+      _field('email', keyboard: TextInputType.emailAddress),
+      _field('phone', keyboard: TextInputType.phone),
+      _field('whatsapp', keyboard: TextInputType.phone),
+      _field('website', keyboard: TextInputType.url),
+    ]),
+    _section('LOCATION', 'Where you operate', [
+      _refDropdown(
+        label: 'Country',
+        value: _countryId,
+        options: ref.watch(countriesProvider),
+        onChanged: (v) => setState(() => _countryId = v),
+      ),
+      _field('state'),
+      _field('city'),
+      _field('address', multiline: true),
+    ]),
+  ];
+
+  Widget _refDropdown({
+    required String label,
+    required int? value,
+    required AsyncValue<List<Map<String, dynamic>>> options,
+    required ValueChanged<int?> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: options.when(
+        data: (items) {
+          final ids = items
+              .map((m) => _refId(m['id']))
+              .whereType<int>()
+              .toSet();
+          return DropdownButtonFormField<int>(
+            initialValue: ids.contains(value) ? value : null,
+            isExpanded: true,
+            style: const TextStyle(color: TopwebsuiteTheme.ink, fontSize: 14),
+            decoration: InputDecoration(
+              labelText: label,
+              labelStyle: const TextStyle(
+                fontSize: 13,
+                color: TopwebsuiteTheme.muted,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: TopwebsuiteTheme.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: TopwebsuiteTheme.border),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            items: [
+              for (final m in items)
+                DropdownMenuItem(
+                  value: _refId(m['id']),
+                  child: Text(
+                    stringValue(m, ['name', 'title', 'label'], fallback: '—'),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: onChanged,
+          );
+        },
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: LinearProgressIndicator(minHeight: 2),
+        ),
+        error: (_, __) => Text(
+          'Could not load $label options',
+          style: const TextStyle(fontSize: 12, color: TopwebsuiteTheme.danger),
+        ),
+      ),
+    );
   }
 
   List<Widget> _invoiceSections() => [
@@ -2106,7 +3061,10 @@ class _DocFormState extends ConsumerState<_DocForm> {
           const SizedBox(height: 10),
           _LineItemsEditor(
             items: _lineItems,
-            onChanged: () { setState(() {}); _saveDraft(); },
+            onChanged: () {
+              setState(() {});
+              _saveDraft();
+            },
           ),
           const SizedBox(height: 10),
           _totalsDisplay('currency'),
@@ -2114,17 +3072,32 @@ class _DocFormState extends ConsumerState<_DocForm> {
       ),
     ),
     _section('TOTAL SETTINGS', 'Optional values', [
-      _field('discount_percent', labelOverride: 'Discount (%)', keyboard: TextInputType.number),
-      _field('vat_percent', labelOverride: 'Tax / VAT (%)', keyboard: TextInputType.number),
+      _field(
+        'discount_percent',
+        labelOverride: 'Discount (%)',
+        keyboard: TextInputType.number,
+      ),
+      _field(
+        'vat_percent',
+        labelOverride: 'Tax / VAT (%)',
+        keyboard: TextInputType.number,
+      ),
     ]),
     _section('PAYMENT', 'Instructions', [
-      _field('payment_details', multiline: true,
-          labelOverride: 'Bank name, account number, payment instructions'),
+      _field(
+        'payment_details',
+        multiline: true,
+        labelOverride: 'Bank name, account number, payment instructions',
+      ),
       _field('authorized_name', labelOverride: 'Authorised name'),
     ]),
     _section('TERMS', 'Notes', [
-      _field('notes', multiline: true,
-          labelOverride: 'Thank you for your business! Payment due within 30 days.'),
+      _field(
+        'notes',
+        multiline: true,
+        labelOverride:
+            'Thank you for your business! Payment due within 30 days.',
+      ),
     ]),
   ];
 
@@ -2141,11 +3114,22 @@ class _DocFormState extends ConsumerState<_DocForm> {
       _field('company_email', keyboard: TextInputType.emailAddress),
     ]),
     _section('PAYMENT', 'From payer', [
-      _field('received_from', required: true, labelOverride: 'Received from (payer name)'),
+      _field(
+        'received_from',
+        required: true,
+        labelOverride: 'Received from (payer name)',
+      ),
       _field('amount', required: true, keyboard: TextInputType.number),
       _field('balance', keyboard: TextInputType.number),
-      _field('payment_method', labelOverride: 'Payment method (cash/transfer/card)'),
-      _field('being_payment_for', multiline: true, labelOverride: 'Being payment for'),
+      _field(
+        'payment_method',
+        labelOverride: 'Payment method (cash/transfer/card)',
+      ),
+      _field(
+        'being_payment_for',
+        multiline: true,
+        labelOverride: 'Being payment for',
+      ),
     ]),
     _section('NOTES', 'Optional', [
       _field('notes', multiline: true),
@@ -2159,6 +3143,7 @@ class _DocFormState extends ConsumerState<_DocForm> {
       _field('company_address', multiline: true),
       _field('company_phone', keyboard: TextInputType.phone),
       _field('company_email', keyboard: TextInputType.emailAddress),
+      _companyLogoPicker(),
     ]),
     _section('WAYBILL DETAILS', 'Basic info', [
       _field('waybill_number', labelOverride: 'Waybill # (auto if blank)'),
@@ -2167,25 +3152,52 @@ class _DocFormState extends ConsumerState<_DocForm> {
     ]),
     _section('SENDER', 'From', [
       _field('sender_name', labelOverride: 'Sender name'),
-      _field('sender_address', multiline: true, labelOverride: 'Sender address'),
-      _field('sender_contact', keyboard: TextInputType.phone,
-          labelOverride: 'Sender phone'),
+      _field(
+        'sender_address',
+        multiline: true,
+        labelOverride: 'Sender address',
+      ),
+      _field(
+        'sender_contact',
+        keyboard: TextInputType.phone,
+        labelOverride: 'Sender phone',
+      ),
     ]),
     _section('RECIPIENT', 'To', [
       _field('recipient_name', required: true, labelOverride: 'Recipient name'),
-      _field('recipient_address', multiline: true, required: true,
-          labelOverride: 'Recipient address'),
-      _field('recipient_contact', keyboard: TextInputType.phone, required: true,
-          labelOverride: 'Recipient phone'),
+      _field(
+        'recipient_address',
+        multiline: true,
+        required: true,
+        labelOverride: 'Recipient address',
+      ),
+      _field(
+        'recipient_contact',
+        keyboard: TextInputType.phone,
+        required: true,
+        labelOverride: 'Recipient phone',
+      ),
     ]),
     _section('SHIPMENT', 'Goods info', [
-      _field('shipment_description', multiline: true, required: true,
-          labelOverride: 'Description of goods'),
-      _field('shipment_value', keyboard: TextInputType.number, required: true,
-          labelOverride: 'Declared value'),
-      _field('weight', keyboard: TextInputType.number, required: true,
-          labelOverride: 'Weight (kg)'),
-      _field('status', labelOverride: 'Status (pending/shipped/delivered)'),
+      _field(
+        'shipment_description',
+        multiline: true,
+        required: true,
+        labelOverride: 'Description of goods',
+      ),
+      _field(
+        'shipment_value',
+        keyboard: TextInputType.number,
+        required: true,
+        labelOverride: 'Declared value',
+      ),
+      _field(
+        'weight',
+        keyboard: TextInputType.number,
+        required: true,
+        labelOverride: 'Weight (kg)',
+      ),
+      _choiceFieldFor('status', labelOverride: 'Status'),
     ]),
   ];
 
@@ -2195,6 +3207,7 @@ class _DocFormState extends ConsumerState<_DocForm> {
       _dateField('date', label: 'Issue Date'),
       _dateField('valid_until', label: 'Valid Until'),
       _field('reference', labelOverride: 'Reference'),
+      _choiceFieldFor('status', labelOverride: 'Status'),
       _field('currency', labelOverride: 'Currency (e.g. NGN, USD)'),
     ]),
     _section('BILL FROM', 'Your company', [
@@ -2202,6 +3215,7 @@ class _DocFormState extends ConsumerState<_DocForm> {
       _field('company_address', multiline: true),
       _field('company_phone', keyboard: TextInputType.phone),
       _field('company_email', keyboard: TextInputType.emailAddress),
+      _companyLogoPicker(),
     ]),
     _section('BILL TO', 'Client info', [
       _field('client_name', required: true),
@@ -2224,7 +3238,10 @@ class _DocFormState extends ConsumerState<_DocForm> {
           const SizedBox(height: 10),
           _LineItemsEditor(
             items: _lineItems,
-            onChanged: () { setState(() {}); _saveDraft(); },
+            onChanged: () {
+              setState(() {});
+              _saveDraft();
+            },
           ),
           const SizedBox(height: 10),
           _totalsDisplay('currency'),
@@ -2232,12 +3249,18 @@ class _DocFormState extends ConsumerState<_DocForm> {
       ),
     ),
     _section('TOTAL SETTINGS', 'Optional values', [
-      _field('discount_percent', labelOverride: 'Discount (%)', keyboard: TextInputType.number),
-      _field('tax_percent', labelOverride: 'Tax / VAT (%)', keyboard: TextInputType.number),
+      _field(
+        'discount_percent',
+        labelOverride: 'Discount (%)',
+        keyboard: TextInputType.number,
+      ),
+      _field(
+        'tax_percent',
+        labelOverride: 'Tax / VAT (%)',
+        keyboard: TextInputType.number,
+      ),
     ]),
-    _section('NOTES', 'Optional', [
-      _field('notes', multiline: true),
-    ]),
+    _section('NOTES', 'Optional', [_field('notes', multiline: true)]),
   ];
 
   List<Widget> _letterSections() => [
@@ -2245,41 +3268,228 @@ class _DocFormState extends ConsumerState<_DocForm> {
       _field('title', required: true),
       _field('page_size', labelOverride: 'Page size (A4/Letter)'),
       _field('orientation', labelOverride: 'Orientation (portrait/landscape)'),
-      _field('status', labelOverride: 'Status (draft/final)'),
+      _choiceFieldFor('status', labelOverride: 'Status'),
     ]),
     _section('CONTENT', 'Letter body', [
-      _field('plain_text', multiline: true, required: true,
-          labelOverride: 'Write your letter here...'),
+      _field(
+        'plain_text',
+        multiline: true,
+        required: true,
+        labelOverride: 'Write your letter here...',
+      ),
     ]),
   ];
 
   List<Widget> _letterheadSections() => [
     _section('LETTERHEAD', 'Details', [
       _field('title', required: true),
+      _letterheadFilePicker(),
       _field('page_size', labelOverride: 'Page size (A4/Letter)'),
-      _field('margin_top', keyboard: TextInputType.number, labelOverride: 'Top margin'),
-      _field('margin_right', keyboard: TextInputType.number, labelOverride: 'Right margin'),
-      _field('margin_bottom', keyboard: TextInputType.number, labelOverride: 'Bottom margin'),
-      _field('margin_left', keyboard: TextInputType.number, labelOverride: 'Left margin'),
+      _field(
+        'margin_top',
+        keyboard: TextInputType.number,
+        labelOverride: 'Top margin',
+      ),
+      _field(
+        'margin_right',
+        keyboard: TextInputType.number,
+        labelOverride: 'Right margin',
+      ),
+      _field(
+        'margin_bottom',
+        keyboard: TextInputType.number,
+        labelOverride: 'Bottom margin',
+      ),
+      _field(
+        'margin_left',
+        keyboard: TextInputType.number,
+        labelOverride: 'Left margin',
+      ),
     ]),
   ];
 
-  List<Widget> _genericSections() {
-    return widget.config.fields.map((f) => Padding(
+  Widget _letterheadFilePicker() {
+    final hasFile = _letterheadFileName != null;
+    final existingUrl = stringValue(widget.row ?? {}, [
+      'file_url',
+      'preview_image_url',
+    ]);
+    final subtitle = hasFile
+        ? _letterheadFileName!
+        : (existingUrl.isNotEmpty
+              ? 'Current file attached — tap to replace'
+              : 'Tap to choose a PDF, JPG or PNG');
+    return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: f.keyboard == FieldKeyboard.date
-          ? _dateField(f.key)
-          : _field(f.key,
-              multiline: f.multiline,
-              required: f.required,
-              keyboard: switch (f.keyboard) {
-                FieldKeyboard.email  => TextInputType.emailAddress,
-                FieldKeyboard.phone  => TextInputType.phone,
-                FieldKeyboard.number => TextInputType.number,
-                FieldKeyboard.url    => TextInputType.url,
-                _                    => TextInputType.text,
-              }),
-    )).toList();
+      child: GestureDetector(
+        onTap: _pickLetterheadFile,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: TopwebsuiteTheme.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: hasFile
+                  ? TopwebsuiteTheme.primary
+                  : TopwebsuiteTheme.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                hasFile
+                    ? Icons.check_circle_rounded
+                    : Icons.upload_file_outlined,
+                size: 20,
+                color: hasFile
+                    ? TopwebsuiteTheme.success
+                    : TopwebsuiteTheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Letterhead file',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: TopwebsuiteTheme.ink,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: TopwebsuiteTheme.muted,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickLetterheadFile() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'pdf'],
+    );
+    final picked = result?.files.singleOrNull;
+    if (picked?.path != null) {
+      setState(() {
+        _letterheadFilePath = picked!.path;
+        _letterheadFileName = picked.name;
+      });
+    }
+  }
+
+  Widget _companyLogoPicker() {
+    final hasLogo = _logoName != null;
+    final existing = stringValue(widget.row ?? {}, ['company_logo']);
+    final subtitle = hasLogo
+        ? _logoName!
+        : (existing.isNotEmpty
+              ? 'Logo set — tap to replace'
+              : 'Tap to add a company logo (JPG/PNG)');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: GestureDetector(
+        onTap: _pickLogo,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: TopwebsuiteTheme.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: hasLogo
+                  ? TopwebsuiteTheme.primary
+                  : TopwebsuiteTheme.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                hasLogo ? Icons.check_circle_rounded : Icons.image_outlined,
+                size: 20,
+                color: hasLogo
+                    ? TopwebsuiteTheme.success
+                    : TopwebsuiteTheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Company logo',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: TopwebsuiteTheme.ink,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: TopwebsuiteTheme.muted,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickLogo() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked != null) {
+      setState(() {
+        _logoPath = picked.path;
+        _logoName = picked.name;
+      });
+    }
+  }
+
+  List<Widget> _genericSections() {
+    return widget.config.fields
+        .map(
+          (f) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: f.keyboard == FieldKeyboard.date
+                ? _dateField(f.key)
+                : _field(
+                    f.key,
+                    multiline: f.multiline,
+                    required: f.required,
+                    keyboard: switch (f.keyboard) {
+                      FieldKeyboard.email => TextInputType.emailAddress,
+                      FieldKeyboard.phone => TextInputType.phone,
+                      FieldKeyboard.number => TextInputType.number,
+                      FieldKeyboard.url => TextInputType.url,
+                      _ => TextInputType.text,
+                    },
+                  ),
+          ),
+        )
+        .toList();
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -2311,7 +3521,8 @@ class _DocFormState extends ConsumerState<_DocForm> {
                       children: [
                         Center(
                           child: Container(
-                            width: 36, height: 4,
+                            width: 36,
+                            height: 4,
                             decoration: BoxDecoration(
                               color: TopwebsuiteTheme.border,
                               borderRadius: BorderRadius.circular(2),
@@ -2319,9 +3530,11 @@ class _DocFormState extends ConsumerState<_DocForm> {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        Text(title,
+                        Text(
+                          title,
                           style: const TextStyle(
-                            fontSize: 17, fontWeight: FontWeight.w800,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
                             color: TopwebsuiteTheme.ink,
                           ),
                         ),
@@ -2329,7 +3542,10 @@ class _DocFormState extends ConsumerState<_DocForm> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: TopwebsuiteTheme.muted),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: TopwebsuiteTheme.muted,
+                    ),
                     onPressed: () => Navigator.of(ctx).pop(false),
                   ),
                 ],
@@ -2353,7 +3569,11 @@ class _DocFormState extends ConsumerState<_DocForm> {
             Container(
               color: Colors.white,
               padding: EdgeInsets.fromLTRB(
-                  16, 10, 16, MediaQuery.of(ctx).padding.bottom + 10),
+                16,
+                10,
+                16,
+                MediaQuery.of(ctx).padding.bottom + 10,
+              ),
               child: Row(
                 children: [
                   Expanded(
@@ -2364,10 +3584,13 @@ class _DocFormState extends ConsumerState<_DocForm> {
                         side: const BorderSide(color: TopwebsuiteTheme.border),
                         minimumSize: const Size.fromHeight(48),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      child: const Text('Cancel',
-                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -2376,19 +3599,31 @@ class _DocFormState extends ConsumerState<_DocForm> {
                     child: ElevatedButton.icon(
                       onPressed: _saving ? null : _save,
                       icon: _saving
-                          ? const SizedBox(width: 14, height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation(Colors.white)))
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
                           : const Icon(Icons.save_rounded, size: 16),
-                      label: Text(_saving ? 'Saving...' : 'Save ${ widget.config.title.split(' ').first}',
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      label: Text(
+                        _saving
+                            ? 'Saving...'
+                            : 'Save ${widget.config.title.split(' ').first}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: TopwebsuiteTheme.primary,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         minimumSize: const Size.fromHeight(48),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
@@ -2403,6 +3638,22 @@ class _DocFormState extends ConsumerState<_DocForm> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Business profile requires a category + country before it can be saved.
+    if (_isBusinessProfile && (_categoryId == null || _countryId == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a category and country.')),
+      );
+      return;
+    }
+    // Letterhead requires a file on first create.
+    if (_isLetterhead && widget.row == null && _letterheadFilePath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a letterhead file to upload.')),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
     final payload = <String, dynamic>{
       for (final e in _controllers.entries) e.key: e.value.text.trim(),
@@ -2415,24 +3666,60 @@ class _DocFormState extends ConsumerState<_DocForm> {
       if (items.isEmpty) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Add at least one line item.')));
+          const SnackBar(content: Text('Add at least one line item.')),
+        );
         return;
       }
       payload['items'] = items;
     }
+    if (_isBusinessProfile) {
+      payload['category'] = _categoryId;
+      payload['country'] = _countryId;
+      if (widget.row == null) payload['publish_status'] = 'draft';
+    }
+
     try {
+      final repo = ref.read(resourceRepositoryProvider);
       final id = stringValue(widget.row ?? {}, widget.config.idKeys);
-      if (widget.row == null || id.isEmpty) {
-        await ref.read(resourceRepositoryProvider).create(widget.config, payload);
+      final isCreate = widget.row == null || id.isEmpty;
+
+      if (_isLetterhead) {
+        final fields = {
+          for (final e in payload.entries) e.key: e.value.toString(),
+        };
+        final files = _letterheadFilePath == null
+            ? <String, String>{}
+            : {'file': _letterheadFilePath!};
+        if (isCreate) {
+          await repo.createMultipart(widget.config, fields, files);
+        } else {
+          await repo.updateMultipart(widget.config, id, fields, files);
+        }
+      } else if (_logoPath != null) {
+        // Document with a chosen company logo → multipart. Line items are sent
+        // as a JSON string alongside the file (per the backend upload rules).
+        final fields = {
+          for (final e in payload.entries)
+            e.key: e.value is List ? jsonEncode(e.value) : e.value.toString(),
+        };
+        final files = {'company_logo': _logoPath!};
+        if (isCreate) {
+          await repo.createMultipart(widget.config, fields, files);
+        } else {
+          await repo.updateMultipart(widget.config, id, fields, files);
+        }
+      } else if (isCreate) {
+        await repo.create(widget.config, payload);
       } else {
-        await ref.read(resourceRepositoryProvider).update(widget.config, id, payload);
+        await repo.update(widget.config, id, payload);
       }
       await ref.read(localStoreProvider).remove(_draftKey);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -2464,15 +3751,16 @@ class _LIC {
 
   factory _LIC.empty() => _LIC(
     desc: TextEditingController(),
-    qty:  TextEditingController(text: '1'),
+    qty: TextEditingController(text: '1'),
     rate: TextEditingController(),
   );
 
   factory _LIC.fromMap(Map<dynamic, dynamic> m) => _LIC(
     desc: TextEditingController(text: m['description']?.toString() ?? ''),
-    qty:  TextEditingController(text: m['quantity']?.toString() ?? '1'),
+    qty: TextEditingController(text: m['quantity']?.toString() ?? '1'),
     rate: TextEditingController(
-        text: (m['rate'] ?? m['unit_price'] ?? m['price'])?.toString() ?? ''),
+      text: (m['rate'] ?? m['unit_price'] ?? m['price'])?.toString() ?? '',
+    ),
   );
 
   final TextEditingController desc;
@@ -2481,11 +3769,15 @@ class _LIC {
 
   Map<String, dynamic> toPayload() => {
     'description': desc.text.trim(),
-    'quantity':    qty.text.trim().isEmpty ? '1' : qty.text.trim(),
-    'rate':        rate.text.trim().isEmpty ? '0' : rate.text.trim(),
+    'quantity': qty.text.trim().isEmpty ? '1' : qty.text.trim(),
+    'rate': rate.text.trim().isEmpty ? '0' : rate.text.trim(),
   };
 
-  void dispose() { desc.dispose(); qty.dispose(); rate.dispose(); }
+  void dispose() {
+    desc.dispose();
+    qty.dispose();
+    rate.dispose();
+  }
 }
 
 class _LineItemsEditor extends StatefulWidget {
@@ -2513,9 +3805,11 @@ class _LineItemsEditorState extends State<_LineItemsEditor> {
           Row(
             children: [
               const Expanded(
-                child: Text('Line Items',
+                child: Text(
+                  'Line Items',
                   style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                     color: TopwebsuiteTheme.ink,
                   ),
                 ),
@@ -2526,8 +3820,10 @@ class _LineItemsEditorState extends State<_LineItemsEditor> {
                   setState(() => widget.items.add(_LIC.empty()));
                   widget.onChanged();
                 },
-                icon: const Icon(Icons.add_circle_outline,
-                    color: TopwebsuiteTheme.primary),
+                icon: const Icon(
+                  Icons.add_circle_outline,
+                  color: TopwebsuiteTheme.primary,
+                ),
               ),
             ],
           ),
@@ -2541,7 +3837,9 @@ class _LineItemsEditorState extends State<_LineItemsEditor> {
                     controller: widget.items[i].desc,
                     onChanged: (_) => widget.onChanged(),
                     style: const TextStyle(
-                        color: TopwebsuiteTheme.ink, fontSize: 14),
+                      color: TopwebsuiteTheme.ink,
+                      fontSize: 14,
+                    ),
                     decoration: InputDecoration(
                       labelText: 'Item ${i + 1} description',
                     ),
@@ -2555,7 +3853,9 @@ class _LineItemsEditorState extends State<_LineItemsEditor> {
                           onChanged: (_) => widget.onChanged(),
                           keyboardType: TextInputType.number,
                           style: const TextStyle(
-                              color: TopwebsuiteTheme.ink, fontSize: 14),
+                            color: TopwebsuiteTheme.ink,
+                            fontSize: 14,
+                          ),
                           decoration: const InputDecoration(labelText: 'Qty'),
                         ),
                       ),
@@ -2566,20 +3866,26 @@ class _LineItemsEditorState extends State<_LineItemsEditor> {
                           onChanged: (_) => widget.onChanged(),
                           keyboardType: TextInputType.number,
                           style: const TextStyle(
-                              color: TopwebsuiteTheme.ink, fontSize: 14),
+                            color: TopwebsuiteTheme.ink,
+                            fontSize: 14,
+                          ),
                           decoration: const InputDecoration(labelText: 'Rate'),
                         ),
                       ),
                       IconButton(
                         tooltip: 'Remove',
-                        onPressed: widget.items.length == 1 ? null : () {
-                          final removed = widget.items.removeAt(i);
-                          removed.dispose();
-                          setState(() {});
-                          widget.onChanged();
-                        },
-                        icon: const Icon(Icons.remove_circle_outline,
-                            color: TopwebsuiteTheme.danger),
+                        onPressed: widget.items.length == 1
+                            ? null
+                            : () {
+                                final removed = widget.items.removeAt(i);
+                                removed.dispose();
+                                setState(() {});
+                                widget.onChanged();
+                              },
+                        icon: const Icon(
+                          Icons.remove_circle_outline,
+                          color: TopwebsuiteTheme.danger,
+                        ),
                       ),
                     ],
                   ),

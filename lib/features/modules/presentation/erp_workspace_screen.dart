@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/utils/api_shapes.dart';
+import '../../../core/widgets/choice_dropdown.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../shared/data/resource_repository.dart';
 import '../../shared/domain/field_config.dart';
@@ -24,10 +25,10 @@ final _erpSummaryProvider = FutureProvider<Map<String, int>>((ref) async {
       api.getList('/api/v1/erp/orders/'),
     ]);
     return {
-      'products':  results[0].length,
-      'services':  results[1].length,
+      'products': results[0].length,
+      'services': results[1].length,
       'customers': results[2].length,
-      'orders':    results[3].length,
+      'orders': results[3].length,
     };
   } catch (_) {
     return {'products': 0, 'services': 0, 'customers': 0, 'orders': 0};
@@ -49,17 +50,18 @@ class _ErpWorkspaceScreenState extends ConsumerState<ErpWorkspaceScreen> {
   final _searchCtrl = TextEditingController();
 
   static const _categories = [
-    ('products',     'Products',     Icons.inventory_2_outlined),
-    ('services',     'Services',     Icons.design_services_outlined),
-    ('customers',    'Customers',    Icons.group_outlined),
-    ('orders',       'Orders',       Icons.shopping_bag_outlined),
+    ('products', 'Products', Icons.inventory_2_outlined),
+    ('services', 'Services', Icons.design_services_outlined),
+    ('customers', 'Customers', Icons.group_outlined),
+    ('orders', 'Orders', Icons.shopping_bag_outlined),
     ('procurements', 'Procurements', Icons.local_mall_outlined),
-    ('deliveries',   'Deliveries',   Icons.local_shipping_outlined),
+    ('deliveries', 'Deliveries', Icons.local_shipping_outlined),
   ];
 
-  ResourceConfig get _currentConfig =>
-      erpConfigs.firstWhere((c) => c.key == _selectedCategory,
-          orElse: () => erpConfigs.first);
+  ResourceConfig get _currentConfig => erpConfigs.firstWhere(
+    (c) => c.key == _selectedCategory,
+    orElse: () => erpConfigs.first,
+  );
 
   @override
   void dispose() {
@@ -97,26 +99,31 @@ class _ErpWorkspaceScreenState extends ConsumerState<ErpWorkspaceScreen> {
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
-          child: Builder(builder: (ctx) => _TopBar(
-            category: 'ERP',
-            searchCtrl: _searchCtrl,
-            onSearch: (v) => setState(() => _search = v),
-            onCreateTap: () => _openForm(ctx, null),
-          )),
+          child: Builder(
+            builder: (ctx) => _TopBar(
+              category: 'ERP',
+              searchCtrl: _searchCtrl,
+              onSearch: (v) => setState(() => _search = v),
+              onCreateTap: () => _openForm(ctx, null),
+            ),
+          ),
         ),
         const SliverToBoxAdapter(
-            child: Divider(height: 1, color: TopwebsuiteTheme.border)),
+          child: Divider(height: 1, color: TopwebsuiteTheme.border),
+        ),
 
         // Stats 2x2
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Consumer(
-              builder: (_, ref, __) => ref.watch(_erpSummaryProvider).when(
-                data: (counts) => _ErpStatsGrid(counts: counts),
-                loading: () => _shimmer(130),
-                error: (_, __) => const SizedBox.shrink(),
-              ),
+              builder: (_, ref, __) => ref
+                  .watch(_erpSummaryProvider)
+                  .when(
+                    data: (counts) => _ErpStatsGrid(counts: counts),
+                    loading: () => _shimmer(130),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
             ),
           ),
         ),
@@ -190,14 +197,18 @@ class _ErpWorkspaceScreenState extends ConsumerState<ErpWorkspaceScreen> {
                     final filtered = _applySearch(items);
                     if (filtered.isEmpty) return _emptyState(_currentLabel());
                     return Column(
-                      children: filtered.map((row) =>
-                          _ErpRecordCard(
-                            config: _currentConfig,
-                            row: row,
-                            onEdit: () => _openForm(ctx, row),
-                            onDeleted: () =>
-                                ref.invalidate(resourceListProvider(_currentConfig)),
-                          )).toList(),
+                      children: filtered
+                          .map(
+                            (row) => _ErpRecordCard(
+                              config: _currentConfig,
+                              row: row,
+                              onEdit: () => _openForm(ctx, row),
+                              onDeleted: () => ref.invalidate(
+                                resourceListProvider(_currentConfig),
+                              ),
+                            ),
+                          )
+                          .toList(),
                     );
                   },
                   loading: () => _shimmer(200),
@@ -218,15 +229,25 @@ class _ErpWorkspaceScreenState extends ConsumerState<ErpWorkspaceScreen> {
     if (_search.isEmpty) return typed;
     final q = _search.toLowerCase();
     return typed.where((r) {
-      for (final key in ['name', 'full_name', 'sku', 'order_number',
-            'tracking_number', 'status', 'title']) {
+      for (final key in [
+        'name',
+        'full_name',
+        'sku',
+        'order_number',
+        'tracking_number',
+        'status',
+        'title',
+      ]) {
         if (r[key]?.toString().toLowerCase().contains(q) == true) return true;
       }
       return false;
     }).toList();
   }
 
-  Future<void> _openForm(BuildContext context, Map<String, dynamic>? row) async {
+  Future<void> _openForm(
+    BuildContext context,
+    Map<String, dynamic>? row,
+  ) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -240,35 +261,53 @@ class _ErpWorkspaceScreenState extends ConsumerState<ErpWorkspaceScreen> {
   }
 
   Widget _shimmer(double h) => Container(
-      height: h,
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(16)));
+    height: h,
+    margin: const EdgeInsets.only(bottom: 12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF1F5F9),
+      borderRadius: BorderRadius.circular(16),
+    ),
+  );
 
   Widget _emptyState(String label) => Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: TopwebsuiteTheme.border)),
-      child: Column(children: [
-        const Icon(Icons.inbox_outlined, size: 36, color: TopwebsuiteTheme.muted),
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: TopwebsuiteTheme.border),
+    ),
+    child: Column(
+      children: [
+        const Icon(
+          Icons.inbox_outlined,
+          size: 36,
+          color: TopwebsuiteTheme.muted,
+        ),
         const SizedBox(height: 10),
-        Text('No $label yet',
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+        Text(
+          'No $label yet',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+        ),
         const SizedBox(height: 4),
-        Text('Create your first $label record',
-            style: const TextStyle(fontSize: 12, color: TopwebsuiteTheme.muted)),
-      ]));
+        Text(
+          'Create your first $label record',
+          style: const TextStyle(fontSize: 12, color: TopwebsuiteTheme.muted),
+        ),
+      ],
+    ),
+  );
 
   Widget _errorState(String msg) => Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: const Color(0xFFFEF2F2),
-          borderRadius: BorderRadius.circular(12)),
-      child: Text(msg,
-          style: const TextStyle(color: TopwebsuiteTheme.danger, fontSize: 13)));
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFEF2F2),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Text(
+      msg,
+      style: const TextStyle(color: TopwebsuiteTheme.danger, fontSize: 13),
+    ),
+  );
 }
 
 // ── Stats grid ─────────────────────────────────────────────────────────────────
@@ -280,10 +319,34 @@ class _ErpStatsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final specs = [
-      _S(Icons.inventory_2_outlined,      'Products',  TopwebsuiteTheme.success,       '${counts['products'] ?? 0}',  'Tracked products'),
-      _S(Icons.design_services_outlined,  'Services',  const Color(0xFF2563EB),        '${counts['services'] ?? 0}',  'Service catalogue'),
-      _S(Icons.group_outlined,            'Customers', TopwebsuiteTheme.warning,       '${counts['customers'] ?? 0}', 'ERP customers'),
-      _S(Icons.shopping_bag_outlined,     'Orders',    TopwebsuiteTheme.success,       '${counts['orders'] ?? 0}',    'Orders and deliveries'),
+      _S(
+        Icons.inventory_2_outlined,
+        'Products',
+        TopwebsuiteTheme.success,
+        '${counts['products'] ?? 0}',
+        'Tracked products',
+      ),
+      _S(
+        Icons.design_services_outlined,
+        'Services',
+        const Color(0xFF2563EB),
+        '${counts['services'] ?? 0}',
+        'Service catalogue',
+      ),
+      _S(
+        Icons.group_outlined,
+        'Customers',
+        TopwebsuiteTheme.warning,
+        '${counts['customers'] ?? 0}',
+        'ERP customers',
+      ),
+      _S(
+        Icons.shopping_bag_outlined,
+        'Orders',
+        TopwebsuiteTheme.success,
+        '${counts['orders'] ?? 0}',
+        'Orders and deliveries',
+      ),
     ];
     return GridView.builder(
       shrinkWrap: true,
@@ -322,42 +385,69 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: TopwebsuiteTheme.border),
         boxShadow: const [
-          BoxShadow(color: Color(0x06024EE0), blurRadius: 10, offset: Offset(0, 3))
+          BoxShadow(
+            color: Color(0x06024EE0),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(children: [
-            Container(
-              width: 30, height: 30,
-              decoration: BoxDecoration(
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
                   color: TopwebsuiteTheme.primarySoft,
-                  borderRadius: BorderRadius.circular(8)),
-              child: Icon(spec.icon, size: 14, color: TopwebsuiteTheme.primary),
-            ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  spec.icon,
+                  size: 14,
+                  color: TopwebsuiteTheme.primary,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
                   color: spec.color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(999)),
-              child: Text(spec.badge,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  spec.badge,
                   style: TextStyle(
-                      fontSize: 9, fontWeight: FontWeight.w700, color: spec.color)),
-            ),
-          ]),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: spec.color,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
-          Text(spec.value,
-              style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w800,
-                  letterSpacing: -0.02, color: TopwebsuiteTheme.ink),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(
+            spec.value,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.02,
+              color: TopwebsuiteTheme.ink,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: 2),
-          Text(spec.label,
-              style: const TextStyle(fontSize: 10, color: TopwebsuiteTheme.muted),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(
+            spec.label,
+            style: const TextStyle(fontSize: 10, color: TopwebsuiteTheme.muted),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ],
       ),
     );
@@ -380,12 +470,25 @@ class _ErpRecordCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final id   = stringValue(row, config.idKeys);
-    final name = stringValue(row, ['name', 'full_name', 'order_number',
-        'tracking_number', 'title'], fallback: id);
-    final sub  = stringValue(row, ['sku', 'company_name', 'status',
-        'delivery_status', 'description'], fallback: '');
-    final price = row['unit_price']?.toString() ?? row['total']?.toString() ?? '';
+    final id = stringValue(row, config.idKeys);
+    final name = stringValue(row, [
+      'name',
+      'full_name',
+      'order_number',
+      'supplier_name',
+      'tracking_number_optional',
+      'tracking_number',
+      'title',
+    ], fallback: id);
+    final sub = stringValue(row, [
+      'sku',
+      'company_name_optional',
+      'status',
+      'delivery_status',
+      'description_optional',
+    ], fallback: '');
+    final price =
+        row['unit_price']?.toString() ?? row['total']?.toString() ?? '';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -396,72 +499,111 @@ class _ErpRecordCard extends ConsumerWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: TopwebsuiteTheme.border),
           boxShadow: const [
-            BoxShadow(color: Color(0x04024EE0), blurRadius: 8, offset: Offset(0, 2))
+            BoxShadow(
+              color: Color(0x04024EE0),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
                     color: TopwebsuiteTheme.primarySoft,
-                    borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.inventory_2_outlined,
-                    size: 18, color: TopwebsuiteTheme.primary),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name,
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700,
-                          color: TopwebsuiteTheme.ink)),
-                  if (sub.isNotEmpty)
-                    Text(sub,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.inventory_2_outlined,
+                    size: 18,
+                    color: TopwebsuiteTheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
                         style: const TextStyle(
-                            fontSize: 12, color: TopwebsuiteTheme.primary),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
-              )),
-              if (price.isNotEmpty)
-                Text(price,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: TopwebsuiteTheme.ink,
+                        ),
+                      ),
+                      if (sub.isNotEmpty)
+                        Text(
+                          sub,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: TopwebsuiteTheme.primary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+                if (price.isNotEmpty)
+                  Text(
+                    price,
                     style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700,
-                        color: TopwebsuiteTheme.ink)),
-            ]),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: TopwebsuiteTheme.ink,
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 10),
-            Row(children: [
-              Expanded(child: _btn('Edit', Icons.edit_outlined, false, onEdit)),
-              const SizedBox(width: 8),
-              Expanded(child: _btn('Delete', Icons.delete_outline, true, () async {
-                await ref.read(resourceRepositoryProvider).remove(config, id);
-                onDeleted();
-              })),
-            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: _btn('Edit', Icons.edit_outlined, false, onEdit),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _btn('Delete', Icons.delete_outline, true, () async {
+                    await ref
+                        .read(resourceRepositoryProvider)
+                        .remove(config, id);
+                    onDeleted();
+                  }),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _btn(String label, IconData icon, bool danger, VoidCallback onTap) =>
-      OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 14),
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: danger ? TopwebsuiteTheme.danger : TopwebsuiteTheme.ink,
-          side: BorderSide(
-              color: danger
-                  ? TopwebsuiteTheme.danger.withValues(alpha: 0.4)
-                  : TopwebsuiteTheme.border),
-          minimumSize: const Size.fromHeight(38),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+  Widget _btn(
+    String label,
+    IconData icon,
+    bool danger,
+    VoidCallback onTap,
+  ) => OutlinedButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon, size: 14),
+    label: Text(label, style: const TextStyle(fontSize: 12)),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: danger ? TopwebsuiteTheme.danger : TopwebsuiteTheme.ink,
+      side: BorderSide(
+        color: danger
+            ? TopwebsuiteTheme.danger.withValues(alpha: 0.4)
+            : TopwebsuiteTheme.border,
+      ),
+      minimumSize: const Size.fromHeight(38),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
+  );
 }
 
 // ── Shared sub-widgets ────────────────────────────────────────────────────────
@@ -484,46 +626,71 @@ class _TopBar extends ConsumerWidget {
     return Container(
       color: TopwebsuiteTheme.primary,
       padding: EdgeInsets.fromLTRB(
-          10, MediaQuery.of(context).padding.top + 8, 10, 8),
-      child: Row(children: [
-        _IconBtn(
+        10,
+        MediaQuery.of(context).padding.top + 8,
+        10,
+        8,
+      ),
+      child: Row(
+        children: [
+          _IconBtn(
             icon: Icons.menu_rounded,
-            onTap: () => Scaffold.of(context).openDrawer()),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TextField(
-            controller: searchCtrl,
-            onChanged: onSearch,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.95), fontSize: 13),
-            decoration: InputDecoration(
-              hintText: 'Search $category...',
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13),
-              prefixIcon: Icon(Icons.search_rounded,
-                  size: 17, color: Colors.white.withValues(alpha: 0.7)),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
-              filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.15),
-              border: OutlineInputBorder(
+            onTap: () => Scaffold.of(context).openDrawer(),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: searchCtrl,
+              onChanged: onSearch,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.95),
+                fontSize: 13,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Search $category...',
+                hintStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 13,
+                ),
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  size: 17,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.15),
+                border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3))),
-              enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3))),
-              focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.6))),
+                  borderSide: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        _IconBtn(icon: Icons.add_rounded, onTap: onCreateTap),
-        const SizedBox(width: 8),
-        if (user != null)
-          GestureDetector(
-            onTap: () => _showMenu(context, ref, user),
-            child: _Avatar(name: user.displayName),
-          ),
-      ]),
+          const SizedBox(width: 8),
+          _IconBtn(icon: Icons.add_rounded, onTap: onCreateTap),
+          const SizedBox(width: 8),
+          if (user != null)
+            GestureDetector(
+              onTap: () => _showMenu(context, ref, user),
+              child: _Avatar(name: user.displayName),
+            ),
+        ],
+      ),
     );
   }
 
@@ -543,14 +710,18 @@ class _IconBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-      onTap: onTap,
-      child: Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.3))),
-          child: Icon(icon, size: 18, color: Colors.white)));
+    onTap: onTap,
+    child: Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+      ),
+      child: Icon(icon, size: 18, color: Colors.white),
+    ),
+  );
 }
 
 class _Avatar extends StatelessWidget {
@@ -563,19 +734,26 @@ class _Avatar extends StatelessWidget {
         ? 'U'
         : name.trim().split(' ').map((w) => w[0]).take(2).join().toUpperCase();
     return Container(
-        width: 40, height: 40,
-        decoration: BoxDecoration(
-            gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [TopwebsuiteTheme.primary, Color(0xFF5B9FE8)]),
-            borderRadius: BorderRadius.circular(13)),
-        alignment: Alignment.center,
-        child: Text(initials,
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 14)));
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [TopwebsuiteTheme.primary, Color(0xFF5B9FE8)],
+        ),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 14,
+        ),
+      ),
+    );
   }
 }
 
@@ -595,87 +773,114 @@ class _ManagementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: TopwebsuiteTheme.border)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title,
-            style: const TextStyle(
-                fontSize: 17, fontWeight: FontWeight.w800,
-                color: TopwebsuiteTheme.ink)),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: TopwebsuiteTheme.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: TopwebsuiteTheme.ink,
+          ),
+        ),
         const SizedBox(height: 4),
-        Text(subtitle,
-            style: const TextStyle(
-                fontSize: 12, color: TopwebsuiteTheme.muted, height: 1.4)),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 12,
+            color: TopwebsuiteTheme.muted,
+            height: 1.4,
+          ),
+        ),
         const SizedBox(height: 14),
-        Row(children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: onRefresh,
-              icon: const Icon(Icons.refresh_rounded, size: 15),
-              label: const Text('Refresh'),
-              style: OutlinedButton.styleFrom(
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh_rounded, size: 15),
+                label: const Text('Refresh'),
+                style: OutlinedButton.styleFrom(
                   foregroundColor: TopwebsuiteTheme.ink,
                   side: const BorderSide(color: TopwebsuiteTheme.border),
                   minimumSize: const Size.fromHeight(44),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   textStyle: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700)),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: onCreateTap,
-              icon: const Icon(Icons.add_rounded, size: 16),
-              label: Text(createLabel, overflow: TextOverflow.ellipsis),
-              style: ElevatedButton.styleFrom(
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: onCreateTap,
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: Text(createLabel, overflow: TextOverflow.ellipsis),
+                style: ElevatedButton.styleFrom(
                   backgroundColor: TopwebsuiteTheme.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   minimumSize: const Size.fromHeight(44),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   textStyle: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700)),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ]),
-      ]));
+          ],
+        ),
+      ],
+    ),
+  );
 }
 
 class _Chip extends StatelessWidget {
-  const _Chip(
-      {required this.label,
-      required this.selected,
-      required this.onTap});
+  const _Chip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-      onTap: onTap,
-      child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-              color: selected ? TopwebsuiteTheme.primary : Colors.white,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                  color: selected
-                      ? TopwebsuiteTheme.primary
-                      : TopwebsuiteTheme.border)),
-          child: Text(label,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: selected
-                      ? Colors.white
-                      : TopwebsuiteTheme.ink))));
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: selected ? TopwebsuiteTheme.primary : Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected ? TopwebsuiteTheme.primary : TopwebsuiteTheme.border,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: selected ? Colors.white : TopwebsuiteTheme.ink,
+        ),
+      ),
+    ),
+  );
 }
 
 class _QuickSearchField extends StatelessWidget {
@@ -690,31 +895,32 @@ class _QuickSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => TextField(
-        controller: controller,
-        onChanged: onChanged,
-        style: const TextStyle(color: TopwebsuiteTheme.ink, fontSize: 13),
-        decoration: InputDecoration(
-          hintText: placeholder,
-          hintStyle: const TextStyle(
-              color: Color(0xFF94A3B8), fontSize: 12),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: TopwebsuiteTheme.border)),
-          enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: TopwebsuiteTheme.border)),
-          focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                  color: TopwebsuiteTheme.primary, width: 1.4)),
+    controller: controller,
+    onChanged: onChanged,
+    style: const TextStyle(color: TopwebsuiteTheme.ink, fontSize: 13),
+    decoration: InputDecoration(
+      hintText: placeholder,
+      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: TopwebsuiteTheme.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: TopwebsuiteTheme.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: TopwebsuiteTheme.primary,
+          width: 1.4,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _CreateBar extends StatelessWidget {
@@ -724,23 +930,33 @@ class _CreateBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-      color: Colors.white,
-      padding: EdgeInsets.fromLTRB(
-          16, 10, 16, MediaQuery.of(context).padding.bottom + 10),
-      child: SizedBox(
-          height: 50,
-          child: ElevatedButton.icon(
-              onPressed: onTap,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text(label,
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700)),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: TopwebsuiteTheme.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14))))));
+    color: Colors.white,
+    padding: EdgeInsets.fromLTRB(
+      16,
+      10,
+      16,
+      MediaQuery.of(context).padding.bottom + 10,
+    ),
+    child: SizedBox(
+      height: 50,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: const Icon(Icons.add_rounded, size: 18),
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: TopwebsuiteTheme.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 // ── Drawer ─────────────────────────────────────────────────────────────────────
@@ -756,66 +972,152 @@ class _UserMenuSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       padding: EdgeInsets.fromLTRB(
-          16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Center(child: Container(
-            width: 36, height: 4,
-            decoration: BoxDecoration(
+        16,
+        16,
+        16,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
                 color: TopwebsuiteTheme.border,
-                borderRadius: BorderRadius.circular(2)))),
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
               color: TopwebsuiteTheme.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: TopwebsuiteTheme.border)),
-          child: Row(children: [
-            _Avatar(name: user?.displayName ?? ''),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(user?.displayName ?? '',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
-                      color: TopwebsuiteTheme.ink)),
-              Text(user?.email ?? '',
-                  style: const TextStyle(fontSize: 12, color: TopwebsuiteTheme.muted)),
-            ])),
-          ]),
-        ),
-        const SizedBox(height: 10),
-        _menuItem(context, Icons.person_outline_rounded, 'User Profile',
-            'Update your business details', false,
-            () { Navigator.pop(context); context.go('/account'); }),
-        _menuItem(context, Icons.settings_outlined, 'Settings',
-            'Account and preferences', false,
-            () { Navigator.pop(context); context.go('/account'); }),
-        _menuItem(context, Icons.workspace_premium_outlined, 'Billing',
-            'Manage subscription', false,
-            () { Navigator.pop(context); context.go('/billing'); }),
-        _menuItem(context, Icons.logout_rounded, 'Logout', 'End this session', true,
-            () { Navigator.pop(context); ref.read(authControllerProvider.notifier).logout(); }),
-      ]),
+              border: Border.all(color: TopwebsuiteTheme.border),
+            ),
+            child: Row(
+              children: [
+                _Avatar(name: user?.displayName ?? ''),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user?.displayName ?? '',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: TopwebsuiteTheme.ink,
+                        ),
+                      ),
+                      Text(
+                        user?.email ?? '',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: TopwebsuiteTheme.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          _menuItem(
+            context,
+            Icons.person_outline_rounded,
+            'User Profile',
+            'Update your business details',
+            false,
+            () {
+              Navigator.pop(context);
+              context.go('/account');
+            },
+          ),
+          _menuItem(
+            context,
+            Icons.settings_outlined,
+            'Settings',
+            'Account and preferences',
+            false,
+            () {
+              Navigator.pop(context);
+              context.go('/account');
+            },
+          ),
+          _menuItem(
+            context,
+            Icons.workspace_premium_outlined,
+            'Billing',
+            'Manage subscription',
+            false,
+            () {
+              Navigator.pop(context);
+              context.go('/billing');
+            },
+          ),
+          _menuItem(
+            context,
+            Icons.logout_rounded,
+            'Logout',
+            'End this session',
+            true,
+            () {
+              Navigator.pop(context);
+              ref.read(authControllerProvider.notifier).logout();
+            },
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _menuItem(BuildContext context, IconData icon, String title,
-      String sub, bool danger, VoidCallback onTap) {
+  Widget _menuItem(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String sub,
+    bool danger,
+    VoidCallback onTap,
+  ) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       leading: Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-              color: danger ? const Color(0xFFFEF2F2) : TopwebsuiteTheme.primarySoft,
-              borderRadius: BorderRadius.circular(12)),
-          child: Icon(icon, size: 18,
-              color: danger ? TopwebsuiteTheme.danger : TopwebsuiteTheme.primary)),
-      title: Text(title, style: TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w700,
-          color: danger ? TopwebsuiteTheme.danger : TopwebsuiteTheme.ink)),
-      subtitle: Text(sub, style: const TextStyle(fontSize: 11, color: TopwebsuiteTheme.muted)),
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: danger
+              ? const Color(0xFFFEF2F2)
+              : TopwebsuiteTheme.primarySoft,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: danger ? TopwebsuiteTheme.danger : TopwebsuiteTheme.primary,
+        ),
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: danger ? TopwebsuiteTheme.danger : TopwebsuiteTheme.ink,
+        ),
+      ),
+      subtitle: Text(
+        sub,
+        style: const TextStyle(fontSize: 11, color: TopwebsuiteTheme.muted),
+      ),
       onTap: onTap,
     );
   }
@@ -842,109 +1144,146 @@ class _ErpDrawer extends ConsumerWidget {
       width: 285,
       backgroundColor: Colors.white,
       child: SafeArea(
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-            child: Row(children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                    color: TopwebsuiteTheme.primarySoft,
-                    borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.inventory_2_outlined,
-                    size: 18, color: TopwebsuiteTheme.primary),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Topwebsuite',
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: TopwebsuiteTheme.primarySoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.inventory_2_outlined,
+                      size: 18,
+                      color: TopwebsuiteTheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Topwebsuite',
                           style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: TopwebsuiteTheme.ink)),
-                      Text('ERP',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: TopwebsuiteTheme.ink,
+                          ),
+                        ),
+                        Text(
+                          'ERP',
                           style: TextStyle(
-                              fontSize: 12,
-                              color: TopwebsuiteTheme.muted)),
-                    ]),
+                            fontSize: 12,
+                            color: TopwebsuiteTheme.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: TopwebsuiteTheme.muted,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
-              IconButton(
-                  icon: const Icon(Icons.close_rounded,
-                      color: TopwebsuiteTheme.muted),
-                  onPressed: () => Navigator.of(context).pop()),
-            ]),
-          ),
-          const Divider(height: 1, color: TopwebsuiteTheme.border),
-          Expanded(
-            child: ListView(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              children: items.map((item) {
-                final active = item.$1 == '/erp';
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    tileColor:
-                        active ? TopwebsuiteTheme.primarySoft : null,
-                    leading: Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(
+            ),
+            const Divider(height: 1, color: TopwebsuiteTheme.border),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                children: items.map((item) {
+                  final active = item.$1 == '/erp';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      tileColor: active ? TopwebsuiteTheme.primarySoft : null,
+                      leading: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
                           color: active
                               ? TopwebsuiteTheme.primary
                               : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(11)),
-                      child: Icon(item.$3,
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Icon(
+                          item.$3,
                           size: 16,
                           color: active
                               ? Colors.white
-                              : TopwebsuiteTheme.primary),
-                    ),
-                    title: Text(item.$2,
+                              : TopwebsuiteTheme.primary,
+                        ),
+                      ),
+                      title: Text(
+                        item.$2,
                         style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: active
-                                ? TopwebsuiteTheme.primary
-                                : TopwebsuiteTheme.ink)),
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      context.go(item.$1);
-                    },
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const Divider(height: 1, color: TopwebsuiteTheme.border),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: ListTile(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-              leading: Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(11)),
-                child: const Icon(Icons.logout_rounded,
-                    size: 16, color: TopwebsuiteTheme.danger),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: active
+                              ? TopwebsuiteTheme.primary
+                              : TopwebsuiteTheme.ink,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        context.go(item.$1);
+                      },
+                    ),
+                  );
+                }).toList(),
               ),
-              title: const Text('Logout',
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: TopwebsuiteTheme.danger)),
-              onTap: () {
-                Navigator.of(context).pop();
-                ref.read(authControllerProvider.notifier).logout();
-              },
             ),
-          ),
-        ]),
+            const Divider(height: 1, color: TopwebsuiteTheme.border),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                leading: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(
+                    Icons.logout_rounded,
+                    size: 16,
+                    color: TopwebsuiteTheme.danger,
+                  ),
+                ),
+                title: const Text(
+                  'Logout',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: TopwebsuiteTheme.danger,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  ref.read(authControllerProvider.notifier).logout();
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -964,7 +1303,10 @@ class _ErpForm extends ConsumerStatefulWidget {
 class _ErpFormState extends ConsumerState<_ErpForm> {
   final _formKey = GlobalKey<FormState>();
   late final Map<String, TextEditingController> _ctrl;
+  late final List<_OrderItemCtrl> _orderItems;
   bool _saving = false;
+
+  bool get _isOrder => widget.config.key == 'orders';
 
   @override
   void initState() {
@@ -972,13 +1314,30 @@ class _ErpFormState extends ConsumerState<_ErpForm> {
     _ctrl = {
       for (final f in widget.config.fields)
         f.key: TextEditingController(
-            text: widget.row?[f.key]?.toString() ?? ''),
+          text: widget.row?[f.key]?.toString() ?? '',
+        ),
     };
+    _orderItems = [];
+    if (_isOrder) {
+      final existing = widget.row?['items'];
+      if (existing is List && existing.isNotEmpty) {
+        for (final item in existing.whereType<Map>()) {
+          _orderItems.add(_OrderItemCtrl.fromMap(item));
+        }
+      } else {
+        _orderItems.add(_OrderItemCtrl.empty());
+      }
+    }
   }
 
   @override
   void dispose() {
-    for (final c in _ctrl.values) { c.dispose(); }
+    for (final c in _ctrl.values) {
+      c.dispose();
+    }
+    for (final i in _orderItems) {
+      i.dispose();
+    }
     super.dispose();
   }
 
@@ -992,127 +1351,279 @@ class _ErpFormState extends ConsumerState<_ErpForm> {
       initialChildSize: 0.92,
       builder: (ctx, ctrl) => Material(
         color: TopwebsuiteTheme.surface,
-        child: Column(children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-            child: Row(children: [
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                          child: Container(
-                              width: 36, height: 4,
-                              decoration: BoxDecoration(
-                                  color: TopwebsuiteTheme.border,
-                                  borderRadius: BorderRadius.circular(2)))),
-                      const SizedBox(height: 10),
-                      Text(title,
-                          style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: TopwebsuiteTheme.ink)),
-                    ]),
-              ),
-              IconButton(
-                  icon: const Icon(Icons.close_rounded,
-                      color: TopwebsuiteTheme.muted),
-                  onPressed: () => Navigator.of(ctx).pop(false)),
-            ]),
-          ),
-          const Divider(height: 1, color: TopwebsuiteTheme.border),
-          Expanded(
-            child: Form(
-              key: _formKey,
-              child: ListView(
-                controller: ctrl,
-                padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+              child: Row(
                 children: [
-                  for (final f in widget.config.fields) ...[
-                    TextFormField(
-                      controller: _ctrl[f.key],
-                      maxLines: f.multiline ? 4 : 1,
-                      style: const TextStyle(
-                          color: TopwebsuiteTheme.ink, fontSize: 14),
-                      keyboardType: switch (f.keyboard) {
-                        FieldKeyboard.email  => TextInputType.emailAddress,
-                        FieldKeyboard.phone  => TextInputType.phone,
-                        FieldKeyboard.number => TextInputType.number,
-                        FieldKeyboard.date   => TextInputType.datetime,
-                        FieldKeyboard.url    => TextInputType.url,
-                        _                    => TextInputType.text,
-                      },
-                      decoration: InputDecoration(
-                        labelText: f.label,
-                        labelStyle: const TextStyle(
-                            fontSize: 13, color: TopwebsuiteTheme.muted),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(
-                                color: TopwebsuiteTheme.border)),
-                        enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(
-                                color: TopwebsuiteTheme.border)),
-                        focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(
-                                color: TopwebsuiteTheme.primary,
-                                width: 1.4)),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                      validator: f.required
-                          ? (v) => v == null || v.trim().isEmpty
-                              ? 'Required'
-                              : null
-                          : null,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: TopwebsuiteTheme.border,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: TopwebsuiteTheme.ink,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-                  ],
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: TopwebsuiteTheme.muted,
+                    ),
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                  ),
                 ],
               ),
             ),
-          ),
-          Container(
-            color: Colors.white,
-            padding: EdgeInsets.fromLTRB(
-                16, 10, 16, MediaQuery.of(ctx).padding.bottom + 10),
-            child: Row(children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: TopwebsuiteTheme.border),
-                      minimumSize: const Size.fromHeight(46),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12))),
-                  child: const Text('Cancel',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
+            const Divider(height: 1, color: TopwebsuiteTheme.border),
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  controller: ctrl,
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    for (final f in widget.config.fields) ...[
+                      if (f.choices != null)
+                        ChoiceDropdown(
+                          controller: _ctrl[f.key]!,
+                          label: f.label,
+                          choices: f.choices!,
+                          required: f.required,
+                        )
+                      else
+                        TextFormField(
+                          controller: _ctrl[f.key],
+                          maxLines: f.multiline ? 4 : 1,
+                          style: const TextStyle(
+                            color: TopwebsuiteTheme.ink,
+                            fontSize: 14,
+                          ),
+                          keyboardType: switch (f.keyboard) {
+                            FieldKeyboard.email => TextInputType.emailAddress,
+                            FieldKeyboard.phone => TextInputType.phone,
+                            FieldKeyboard.number => TextInputType.number,
+                            FieldKeyboard.date => TextInputType.datetime,
+                            FieldKeyboard.url => TextInputType.url,
+                            _ => TextInputType.text,
+                          },
+                          decoration: InputDecoration(
+                            labelText: f.label,
+                            labelStyle: const TextStyle(
+                              fontSize: 13,
+                              color: TopwebsuiteTheme.muted,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(
+                                color: TopwebsuiteTheme.border,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(
+                                color: TopwebsuiteTheme.border,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(
+                                color: TopwebsuiteTheme.primary,
+                                width: 1.4,
+                              ),
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          validator: f.required
+                              ? (v) => v == null || v.trim().isEmpty
+                                    ? 'Required'
+                                    : null
+                              : null,
+                        ),
+                      const SizedBox(height: 10),
+                    ],
+                    if (_isOrder) _buildOrderItems(),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: ElevatedButton(
-                  onPressed: _saving ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: TopwebsuiteTheme.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      minimumSize: const Size.fromHeight(46),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12))),
-                  child: Text(_saving ? 'Saving...' : 'Save Record',
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            Container(
+              color: Colors.white,
+              padding: EdgeInsets.fromLTRB(
+                16,
+                10,
+                16,
+                MediaQuery.of(ctx).padding.bottom + 10,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: TopwebsuiteTheme.border),
+                        minimumSize: const Size.fromHeight(46),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: _saving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: TopwebsuiteTheme.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        minimumSize: const Size.fromHeight(46),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        _saving ? 'Saving...' : 'Save Record',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderItems() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: TopwebsuiteTheme.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Order Items',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: TopwebsuiteTheme.ink,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Add item',
+                  onPressed: () =>
+                      setState(() => _orderItems.add(_OrderItemCtrl.empty())),
+                  icon: const Icon(
+                    Icons.add_circle_outline,
+                    color: TopwebsuiteTheme.primary,
+                  ),
+                ),
+              ],
+            ),
+            for (var i = 0; i < _orderItems.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  children: [
+                    TextFormField(
+                      controller: _orderItems[i].desc,
+                      style: const TextStyle(
+                        color: TopwebsuiteTheme.ink,
+                        fontSize: 14,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Item ${i + 1} description',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _orderItems[i].qty,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(
+                              color: TopwebsuiteTheme.ink,
+                              fontSize: 14,
+                            ),
+                            decoration: const InputDecoration(labelText: 'Qty'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _orderItems[i].price,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(
+                              color: TopwebsuiteTheme.ink,
+                              fontSize: 14,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Unit price',
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Remove',
+                          onPressed: _orderItems.length == 1
+                              ? null
+                              : () => setState(() {
+                                  _orderItems.removeAt(i).dispose();
+                                }),
+                          icon: const Icon(
+                            Icons.remove_circle_outline,
+                            color: TopwebsuiteTheme.danger,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ]),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -1120,13 +1631,29 @@ class _ErpFormState extends ConsumerState<_ErpForm> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
-    final payload = {
-      for (final e in _ctrl.entries) e.key: e.value.text.trim()
+    final payload = <String, dynamic>{
+      for (final e in _ctrl.entries) e.key: e.value.text.trim(),
     };
+    if (_isOrder) {
+      final items = _orderItems
+          .map((i) => i.toPayload())
+          .where((i) => i['description'].toString().isNotEmpty)
+          .toList();
+      if (items.isEmpty) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Add at least one order item.')),
+        );
+        return;
+      }
+      payload['items'] = items;
+    }
     try {
       final id = stringValue(widget.row ?? {}, widget.config.idKeys);
       if (widget.row == null || id.isEmpty) {
-        await ref.read(resourceRepositoryProvider).create(widget.config, payload);
+        await ref
+            .read(resourceRepositoryProvider)
+            .create(widget.config, payload);
       } else {
         await ref
             .read(resourceRepositoryProvider)
@@ -1135,11 +1662,48 @@ class _ErpFormState extends ConsumerState<_ErpForm> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+}
+
+// ── ERP order line item controllers ────────────────────────────────────────────
+
+class _OrderItemCtrl {
+  _OrderItemCtrl({required this.desc, required this.qty, required this.price});
+
+  factory _OrderItemCtrl.empty() => _OrderItemCtrl(
+    desc: TextEditingController(),
+    qty: TextEditingController(text: '1'),
+    price: TextEditingController(),
+  );
+
+  factory _OrderItemCtrl.fromMap(Map<dynamic, dynamic> m) => _OrderItemCtrl(
+    desc: TextEditingController(text: m['description']?.toString() ?? ''),
+    qty: TextEditingController(text: m['quantity']?.toString() ?? '1'),
+    price: TextEditingController(
+      text: (m['unit_price'] ?? m['rate'] ?? m['price'])?.toString() ?? '',
+    ),
+  );
+
+  final TextEditingController desc;
+  final TextEditingController qty;
+  final TextEditingController price;
+
+  Map<String, dynamic> toPayload() => {
+    'description': desc.text.trim(),
+    'quantity': qty.text.trim().isEmpty ? '1' : qty.text.trim(),
+    'unit_price': price.text.trim().isEmpty ? '0' : price.text.trim(),
+  };
+
+  void dispose() {
+    desc.dispose();
+    qty.dispose();
+    price.dispose();
   }
 }

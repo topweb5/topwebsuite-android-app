@@ -147,6 +147,49 @@ class ApiClient {
     await _request<dynamic>(() => _dio.delete<dynamic>(path));
   }
 
+  Future<Map<String, dynamic>> multipartPost(
+    String path, {
+    required Map<String, String> fields,
+    Map<String, String> files = const {},
+  }) async {
+    final formData = FormData.fromMap({
+      ...fields,
+      for (final e in files.entries)
+        e.key: await MultipartFile.fromFile(e.value),
+    });
+    final response = await _request<Map<String, dynamic>>(
+      () => _dio.post<dynamic>(
+        path,
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      ),
+    );
+    return _asMap(response.data);
+  }
+
+  Future<Map<String, dynamic>> multipartPatch(
+    String path, {
+    required Map<String, String> fields,
+    Map<String, String> files = const {},
+  }) async {
+    final formData = FormData.fromMap({
+      ...fields,
+      for (final e in files.entries)
+        e.key: await MultipartFile.fromFile(e.value),
+    });
+    final response = await _request<Map<String, dynamic>>(
+      () => _dio.patch<dynamic>(
+        path,
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      ),
+    );
+    return _asMap(response.data);
+  }
+
+  // downloadAndOpen is handled by FileService — kept here for convenience callers
+  // Use fileServiceProvider.openPdf() instead.
+
   Future<Response<List<int>>> download(String path) {
     return _request<List<int>>(
       () => _dio.get<List<int>>(

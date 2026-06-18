@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/env.dart';
 import '../../../app/theme.dart';
@@ -8,6 +7,7 @@ import '../../../core/services/file_service.dart';
 import '../../../core/storage/local_store.dart';
 import '../../../core/storage/secure_token_store.dart';
 import '../../../core/utils/api_shapes.dart';
+import '../../../core/widgets/pdf_preview_webview.dart';
 import '../../../core/widgets/web_status_chip.dart';
 import '../data/resource_repository.dart';
 import '../domain/field_config.dart';
@@ -665,25 +665,14 @@ class BackendPreviewScreen extends StatefulWidget {
 }
 
 class _BackendPreviewScreenState extends State<BackendPreviewScreen> {
-  late final WebViewController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    final headers = <String, String>{};
-    if (widget.token != null && widget.token!.isNotEmpty) {
-      headers['Authorization'] = 'Bearer ${widget.token}';
-    }
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..loadRequest(AppEnv.resolve(widget.path), headers: headers);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
-      body: WebViewWidget(controller: _controller),
+      body: PdfPreviewWebView(
+        url: AppEnv.resolve(widget.path),
+        token: widget.token,
+      ),
     );
   }
 }

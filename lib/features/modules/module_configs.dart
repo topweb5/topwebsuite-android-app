@@ -162,6 +162,15 @@ final documentConfigs = <ResourceConfig>[
       FieldConfig('date', 'Issue date', keyboard: FieldKeyboard.date),
       FieldConfig('valid_until', 'Valid until', keyboard: FieldKeyboard.date),
       FieldConfig('reference', 'Reference'),
+      FieldConfig(
+        'status',
+        'Status',
+        choices: [
+          FieldChoice('open', 'Open'),
+          FieldChoice('accepted', 'Accepted'),
+          FieldChoice('expired', 'Expired'),
+        ],
+      ),
       FieldConfig('currency', 'Currency'),
       FieldConfig(
         'discount_percent',
@@ -182,7 +191,7 @@ final documentConfigs = <ResourceConfig>[
     deletePath: (id) => _delete('/api/waybills', id),
     previewPath: (id) => '/api/waybills/$id/preview/',
     downloadPath: (id) => '/api/waybills/$id/download/',
-    titleKeys: const ['waybill_number', 'receiver_name', 'recipient_name'],
+    titleKeys: const ['waybill_number', 'recipient_name'],
     fields: const [
       FieldConfig('company_name', 'Company name', required: true),
       FieldConfig('company_address', 'Company address', multiline: true),
@@ -196,15 +205,25 @@ final documentConfigs = <ResourceConfig>[
         'Company email',
         keyboard: FieldKeyboard.email,
       ),
+      FieldConfig(
+        'company_website',
+        'Company website',
+        keyboard: FieldKeyboard.url,
+      ),
       FieldConfig('waybill_number', 'Waybill number'),
-      FieldConfig('date', 'Date', keyboard: FieldKeyboard.date),
-      FieldConfig('sender_name', 'Sender name'),
-      FieldConfig('sender_address', 'Sender address', multiline: true),
       FieldConfig('currency', 'Currency'),
+      FieldConfig('sender_name', 'Sender name', required: true),
+      FieldConfig(
+        'sender_address',
+        'Sender address',
+        multiline: true,
+        required: true,
+      ),
       FieldConfig(
         'sender_contact',
         'Sender contact',
         keyboard: FieldKeyboard.phone,
+        required: true,
       ),
       FieldConfig('recipient_name', 'Recipient name', required: true),
       FieldConfig(
@@ -237,7 +256,15 @@ final documentConfigs = <ResourceConfig>[
         keyboard: FieldKeyboard.number,
         required: true,
       ),
-      FieldConfig('status', 'Status'),
+      FieldConfig(
+        'status',
+        'Status',
+        choices: [
+          FieldChoice('pending', 'Pending'),
+          FieldChoice('shipped', 'Shipped'),
+          FieldChoice('delivered', 'Delivered'),
+        ],
+      ),
     ],
   ),
 ];
@@ -284,7 +311,11 @@ final letterConfigs = <ResourceConfig>[
       FieldConfig('plain_text', 'Plain text', multiline: true),
       FieldConfig('page_size', 'Page size'),
       FieldConfig('orientation', 'Orientation'),
-      FieldConfig('status', 'Status'),
+      FieldConfig(
+        'status',
+        'Status',
+        choices: [FieldChoice('draft', 'Draft'), FieldChoice('final', 'Final')],
+      ),
     ],
   ),
 ];
@@ -302,43 +333,109 @@ final businessProfileConfig = ResourceConfig(
   fields: _businessFields,
 );
 
+// ── CRM ── field keys mirror apps/crm/models.py exactly ──────────────────────
+
 final crmConfigs = <ResourceConfig>[
-  _crm('leads', 'Leads', [
-    const FieldConfig('full_name', 'Full name', required: true),
-    const FieldConfig('email', 'Email', keyboard: FieldKeyboard.email),
-    const FieldConfig('phone', 'Phone', keyboard: FieldKeyboard.phone),
-    const FieldConfig('company_name', 'Company name'),
-    const FieldConfig('source', 'Source'),
-    const FieldConfig('status', 'Status'),
-    const FieldConfig('stage', 'Stage'),
-    const FieldConfig('notes', 'Notes', multiline: true),
+  _crm('leads', 'Leads', const [
+    FieldConfig('full_name', 'Full name', required: true),
+    FieldConfig('email', 'Email', keyboard: FieldKeyboard.email),
+    FieldConfig('phone', 'Phone', keyboard: FieldKeyboard.phone),
+    FieldConfig('company_name', 'Company name'),
+    FieldConfig(
+      'source',
+      'Source',
+      choices: [
+        FieldChoice('manual', 'Manual'),
+        FieldChoice('directory_enquiry', 'Directory Enquiry'),
+        FieldChoice('quote_request', 'Quote Request'),
+        FieldChoice('imported', 'Imported'),
+      ],
+    ),
+    FieldConfig(
+      'status',
+      'Status',
+      choices: [
+        FieldChoice('new', 'New'),
+        FieldChoice('contacted', 'Contacted'),
+        FieldChoice('qualified', 'Qualified'),
+        FieldChoice('won', 'Won'),
+        FieldChoice('lost', 'Lost'),
+      ],
+    ),
+    FieldConfig(
+      'stage',
+      'Stage',
+      choices: [
+        FieldChoice('prospect', 'Prospect'),
+        FieldChoice('negotiation', 'Negotiation'),
+        FieldChoice('proposal', 'Proposal'),
+        FieldChoice('closed', 'Closed'),
+      ],
+    ),
+    FieldConfig('notes', 'Notes', multiline: true),
   ]),
-  _crm('contacts', 'Contacts', [
-    const FieldConfig('full_name', 'Full name', required: true),
-    const FieldConfig('email', 'Email', keyboard: FieldKeyboard.email),
-    const FieldConfig('phone', 'Phone', keyboard: FieldKeyboard.phone),
-    const FieldConfig('company_name', 'Company name'),
-    const FieldConfig('notes', 'Notes', multiline: true),
+  _crm('contacts', 'Contacts', const [
+    FieldConfig('full_name', 'Full name', required: true),
+    FieldConfig('email', 'Email', keyboard: FieldKeyboard.email),
+    FieldConfig('phone', 'Phone', keyboard: FieldKeyboard.phone),
+    FieldConfig('address_optional', 'Address', multiline: true),
+    FieldConfig('notes_optional', 'Notes', multiline: true),
   ]),
-  _crm('companies', 'Companies', [
-    const FieldConfig('name', 'Company name', required: true),
-    const FieldConfig('email', 'Email', keyboard: FieldKeyboard.email),
-    const FieldConfig('phone', 'Phone', keyboard: FieldKeyboard.phone),
-    const FieldConfig('website', 'Website', keyboard: FieldKeyboard.url),
-    const FieldConfig('address', 'Address', multiline: true),
+  _crm('companies', 'Companies', const [
+    FieldConfig('name', 'Company name', required: true),
+    FieldConfig('email_optional', 'Email', keyboard: FieldKeyboard.email),
+    FieldConfig('phone_optional', 'Phone', keyboard: FieldKeyboard.phone),
+    FieldConfig('website_optional', 'Website', keyboard: FieldKeyboard.url),
+    FieldConfig('industry_optional', 'Industry'),
+    FieldConfig('address_optional', 'Address', multiline: true),
+    FieldConfig('city_optional', 'City'),
+    FieldConfig('state_optional', 'State'),
+    FieldConfig('country_optional', 'Country'),
+    FieldConfig('notes_optional', 'Notes', multiline: true),
   ]),
-  _crm('opportunities', 'Opportunities', [
-    const FieldConfig('title', 'Title', required: true),
-    const FieldConfig('value', 'Value', keyboard: FieldKeyboard.number),
-    const FieldConfig('stage', 'Stage'),
-    const FieldConfig('status', 'Status'),
-    const FieldConfig('notes', 'Notes', multiline: true),
+  _crm('opportunities', 'Opportunities', const [
+    FieldConfig('title', 'Title', required: true),
+    FieldConfig('value_optional', 'Value', keyboard: FieldKeyboard.number),
+    FieldConfig(
+      'stage',
+      'Stage',
+      choices: [
+        FieldChoice('lead', 'Lead'),
+        FieldChoice('discovery', 'Discovery'),
+        FieldChoice('proposal', 'Proposal'),
+        FieldChoice('negotiation', 'Negotiation'),
+        FieldChoice('won', 'Won'),
+        FieldChoice('lost', 'Lost'),
+      ],
+    ),
+    FieldConfig(
+      'probability_optional',
+      'Probability %',
+      keyboard: FieldKeyboard.number,
+    ),
+    FieldConfig(
+      'expected_close_date_optional',
+      'Expected close date',
+      keyboard: FieldKeyboard.date,
+    ),
+    FieldConfig('notes_optional', 'Notes', multiline: true),
   ]),
-  _crm('activities', 'Activities', [
-    const FieldConfig('title', 'Title', required: true),
-    const FieldConfig('activity_type', 'Activity type'),
-    const FieldConfig('due_date', 'Due date', keyboard: FieldKeyboard.date),
-    const FieldConfig('notes', 'Notes', multiline: true),
+  _crm('activities', 'Activities', const [
+    FieldConfig('subject', 'Subject', required: true),
+    FieldConfig(
+      'activity_type',
+      'Activity type',
+      required: true,
+      choices: [
+        FieldChoice('call', 'Call'),
+        FieldChoice('email', 'Email'),
+        FieldChoice('meeting', 'Meeting'),
+        FieldChoice('task', 'Task'),
+        FieldChoice('note', 'Note'),
+      ],
+    ),
+    FieldConfig('due_date_optional', 'Due date', keyboard: FieldKeyboard.date),
+    FieldConfig('note_optional', 'Note', multiline: true),
   ]),
 ];
 
@@ -355,79 +452,115 @@ ResourceConfig _crm(String key, String title, List<FieldConfig> fields) {
   );
 }
 
+// ── ERP ── field keys mirror apps/erp/models.py exactly ──────────────────────
+
 final erpConfigs = <ResourceConfig>[
-  _erp('products', 'Products', [
-    const FieldConfig('name', 'Name', required: true),
-    const FieldConfig('sku', 'SKU'),
-    const FieldConfig('description', 'Description', multiline: true),
-    const FieldConfig('category', 'Category'),
-    const FieldConfig(
+  _erp('products', 'Products', const [
+    FieldConfig('name', 'Name', required: true),
+    FieldConfig('sku', 'SKU', required: true),
+    FieldConfig('description_optional', 'Description', multiline: true),
+    FieldConfig('category_optional', 'Category'),
+    FieldConfig(
       'unit_price',
       'Unit price',
       keyboard: FieldKeyboard.number,
+      required: true,
     ),
-    const FieldConfig(
+    FieldConfig(
       'stock_quantity',
       'Stock quantity',
       keyboard: FieldKeyboard.number,
     ),
-    const FieldConfig(
-      'reorder_level',
+    FieldConfig(
+      'reorder_level_optional',
       'Reorder level',
       keyboard: FieldKeyboard.number,
     ),
   ]),
-  _erp('services', 'Services', [
-    const FieldConfig('name', 'Name', required: true),
-    const FieldConfig('description', 'Description', multiline: true),
-    const FieldConfig(
+  _erp('services', 'Services', const [
+    FieldConfig('name', 'Name', required: true),
+    FieldConfig('description_optional', 'Description', multiline: true),
+    FieldConfig(
       'unit_price',
       'Unit price',
       keyboard: FieldKeyboard.number,
+      required: true,
     ),
   ]),
-  _erp('customers', 'Customers', [
-    const FieldConfig('full_name', 'Full name', required: true),
-    const FieldConfig('company_name', 'Company name'),
-    const FieldConfig('email', 'Email', keyboard: FieldKeyboard.email),
-    const FieldConfig('phone', 'Phone', keyboard: FieldKeyboard.phone),
-    const FieldConfig('address', 'Address', multiline: true),
-    const FieldConfig('city', 'City'),
-    const FieldConfig('state', 'State'),
-    const FieldConfig('country', 'Country'),
+  _erp('customers', 'Customers', const [
+    FieldConfig('full_name', 'Full name', required: true),
+    FieldConfig('company_name_optional', 'Company name'),
+    FieldConfig('email_optional', 'Email', keyboard: FieldKeyboard.email),
+    FieldConfig('phone_optional', 'Phone', keyboard: FieldKeyboard.phone),
+    FieldConfig('address_optional', 'Address', multiline: true),
+    FieldConfig('city_optional', 'City'),
+    FieldConfig('state_optional', 'State'),
+    FieldConfig('country_optional', 'Country'),
+    FieldConfig('notes_optional', 'Notes', multiline: true),
   ]),
-  _erp('orders', 'Orders', [
-    const FieldConfig('order_number', 'Order number', required: true),
-    const FieldConfig('status', 'Status'),
-    const FieldConfig('tax', 'Tax', keyboard: FieldKeyboard.number),
-    const FieldConfig('discount', 'Discount', keyboard: FieldKeyboard.number),
-    const FieldConfig('notes', 'Notes', multiline: true),
+  _erp('orders', 'Orders', const [
+    FieldConfig('order_number', 'Order number', required: true),
+    FieldConfig(
+      'status',
+      'Status',
+      choices: [
+        FieldChoice('draft', 'Draft'),
+        FieldChoice('confirmed', 'Confirmed'),
+        FieldChoice('fulfilled', 'Fulfilled'),
+        FieldChoice('cancelled', 'Cancelled'),
+      ],
+    ),
+    FieldConfig('tax_optional', 'Tax', keyboard: FieldKeyboard.number),
+    FieldConfig(
+      'discount_optional',
+      'Discount',
+      keyboard: FieldKeyboard.number,
+    ),
+    FieldConfig('notes_optional', 'Notes', multiline: true),
   ]),
-  _erp('procurements', 'Procurements', [
-    const FieldConfig('title', 'Title', required: true),
-    const FieldConfig('status', 'Status'),
-    const FieldConfig('notes', 'Notes', multiline: true),
+  _erp('procurements', 'Procurements', const [
+    FieldConfig('supplier_name', 'Supplier name', required: true),
+    FieldConfig('reference_optional', 'Reference'),
+    FieldConfig(
+      'status',
+      'Status',
+      choices: [
+        FieldChoice('pending', 'Pending'),
+        FieldChoice('ordered', 'Ordered'),
+        FieldChoice('received', 'Received'),
+      ],
+    ),
+    FieldConfig('total_optional', 'Total', keyboard: FieldKeyboard.number),
+    FieldConfig('notes_optional', 'Notes', multiline: true),
   ]),
-  _erp('deliveries', 'Deliveries', [
-    const FieldConfig('tracking_number', 'Tracking number'),
-    const FieldConfig('delivery_status', 'Delivery status'),
-    const FieldConfig(
-      'dispatch_date',
+  _erp('deliveries', 'Deliveries', const [
+    FieldConfig('tracking_number_optional', 'Tracking number'),
+    FieldConfig(
+      'delivery_status',
+      'Delivery status',
+      choices: [
+        FieldChoice('pending', 'Pending'),
+        FieldChoice('dispatched', 'Dispatched'),
+        FieldChoice('delivered', 'Delivered'),
+      ],
+    ),
+    FieldConfig(
+      'dispatch_date_optional',
       'Dispatch date',
       keyboard: FieldKeyboard.date,
     ),
-    const FieldConfig(
-      'delivery_date',
+    FieldConfig(
+      'delivery_date_optional',
       'Delivery date',
       keyboard: FieldKeyboard.date,
     ),
-    const FieldConfig(
+    FieldConfig(
       'delivery_address',
       'Delivery address',
       multiline: true,
       required: true,
     ),
-    const FieldConfig('notes', 'Notes', multiline: true),
+    FieldConfig('notes_optional', 'Notes', multiline: true),
   ]),
 ];
 
